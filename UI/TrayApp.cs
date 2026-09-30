@@ -203,22 +203,8 @@ internal sealed class TrayApp : ApplicationContext
 
     private static Icon CreateIcon()
     {
-        using var bmp = new Bitmap(32, 32);
-        using (var g = Graphics.FromImage(bmp))
-        {
-            g.SmoothingMode = SmoothingMode.AntiAlias;
-            using var bg = new LinearGradientBrush(new Rectangle(0, 0, 32, 32), Color.FromArgb(0, 190, 255), Color.FromArgb(120, 60, 255), 45f);
-            using var path = new GraphicsPath();
-            path.AddArc(1, 1, 10, 10, 180, 90); path.AddArc(21, 1, 10, 10, 270, 90);
-            path.AddArc(21, 21, 10, 10, 0, 90); path.AddArc(1, 21, 10, 10, 90, 90);
-            path.CloseFigure();
-            g.FillPath(bg, path);
-            using var pen = new Pen(Color.White, 2.5f);
-            g.DrawLines(pen, new[] { new Point(7, 13), new Point(7, 7), new Point(13, 7) });
-            g.DrawLines(pen, new[] { new Point(19, 25), new Point(25, 25), new Point(25, 19) });
-            g.FillEllipse(Brushes.White, 12, 12, 8, 8);
-        }
-        return Icon.FromHandle(bmp.GetHicon());
+        using var stream = typeof(TrayApp).Assembly.GetManifestResourceStream("FrameBurst.FrameBurst.ico")!;
+        return new Icon(stream, SystemInformation.SmallIconSize);
     }
 
     /// <summary>Hidden message-only window that receives WM_HOTKEY.</summary>

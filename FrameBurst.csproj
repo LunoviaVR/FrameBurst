@@ -9,6 +9,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\FrameBurst.ico</ApplicationIcon>
     <AssemblyName>FrameBurst</AssemblyName>
     <RootNamespace>FrameBurst</RootNamespace>
     <Version>1.0.0</Version>
@@ -24,6 +25,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Gpu\Shaders.hlsl" LogicalName="FrameBurst.Shaders.hlsl" />
+    <EmbeddedResource Include="Assets\FrameBurst.ico" LogicalName="FrameBurst.FrameBurst.ico" />
   </ItemGroup>
 
 </Project>

@@ -1,3 +1,5 @@
+<p align="center"><img src="Assets/logo.png" alt="FrameBurst" width="480"></p>
+
 # FrameBurst
 
 A ShareX-style tray screenshot tool built around one goal: capturing the highest-quality image possible,
