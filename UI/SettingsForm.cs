@@ -1,7 +1,11 @@
+using System.Diagnostics;
+
 namespace FrameBurst.UI;
 
 internal sealed class SettingsForm : Form
 {
+    private const string DateFormatDocs = "https://learn.microsoft.com/en-us/dotnet/standard/base-types/custom-date-and-time-format-strings";
+
     private readonly Settings _s;
 
     private readonly HotkeyBox _hkRegion = new(), _hkFull = new(), _hkMonitor = new(), _hkWindow = new();
@@ -48,8 +52,17 @@ internal sealed class SettingsForm : Form
         var folderRow = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
         folderRow.Controls.AddRange(new Control[] { _folder, browse });
 
+        var readMore = new LinkLabel { Text = "Read more.", AutoSize = true, Margin = new Padding(0, 0, 3, 8) };
+        readMore.LinkClicked += (_, _) =>
+        {
+            try { Process.Start(new ProcessStartInfo(DateFormatDocs) { UseShellExecute = true }); }
+            catch (Exception ex) { MessageBox.Show(this, ex.Message, "FrameBurst", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+        };
+        var patternNote = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
+        patternNote.Controls.AddRange(new Control[] { Note("Text in {braces} is a .NET date format, e.g. {yyyy-MM-dd_HH-mm-ss}."), readMore });
+
         tabs.TabPages.Add(Page("Output", Grid(
-            ("Folder", folderRow), ("File name", _pattern), ("", Note("Text in {braces} is a .NET date format, e.g. {yyyy-MM-dd_HH-mm-ss}.")),
+            ("Folder", folderRow), ("File name", _pattern), ("", patternNote),
             ("", _save), ("", _clip), ("", _notify),
             ("PNG compression", _png), ("", Note("PNG is lossless at every setting: this only trades file size for speed.")))));
 

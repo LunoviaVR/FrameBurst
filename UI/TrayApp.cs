@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Runtime.InteropServices;
 using FrameBurst.Capture;
 using FrameBurst.Win32;
 
@@ -212,15 +213,29 @@ internal sealed class TrayApp : ApplicationContext
     }
 
     /// <summary>Hidden message-only window that receives WM_HOTKEY.</summary>
+    /// <summary>
+    /// Hidden message-only window that receives WM_HOTKEY, plus a low-level keyboard hook. Full-screen games often
+    /// read the keyboard through raw input with hotkeys disabled, or grab the key first, so WM_HOTKEY never arrives.
+    /// The hook sees keys before any application does, so the capture hotkeys keep working on top of them.
+    /// </summary>
     private sealed class HotkeyWindow : NativeWindow
     {
+        private const int WM_HOOK_HOTKEY = 0x8001; // WM_APP + 1
+
         private readonly Action<CaptureMode> _callback;
         private readonly List<int> _ids = new();
+        private readonly List<(int Id, uint Vk, Keys Mods)> _keys = new();
+        private readonly Native.LowLevelKeyboardProc _proc; // kept alive for as long as the hook is installed
+        private IntPtr _hook;
+        private uint _swallowedVk; // key whose press we consumed; its repeats and release are consumed too
 
         public HotkeyWindow(Action<CaptureMode> callback)
         {
             _callback = callback;
             CreateHandle(new CreateParams { Caption = "FrameBurstHotkeys", Parent = new IntPtr(-3) /* HWND_MESSAGE */ });
+            _proc = HookProc;
+            _hook = Native.SetWindowsHookExW(Native.WH_KEYBOARD_LL, _proc, Native.GetModuleHandleW(null), 0);
+            Log.Write(_hook != IntPtr.Zero ? "keyboard hook installed" : $"keyboard hook failed: {Marshal.GetLastWin32Error()}");
         }
 
         public List<string> Register(IEnumerable<(CaptureMode Mode, Hotkey Key)> keys)
@@ -236,8 +251,10 @@ internal sealed class TrayApp : ApplicationContext
                 if (hk.Modifiers.HasFlag(Keys.Shift)) mods |= Native.MOD_SHIFT;
                 if (hk.Modifiers.HasFlag(Keys.LWin)) mods |= Native.MOD_WIN;
                 int id = (int)mode + 1;
+                _keys.Add((id, (uint)hk.Key, hk.Modifiers & (Keys.Control | Keys.Alt | Keys.Shift | Keys.LWin)));
+                // The hook handles the key even when another app has registered the same combination.
                 if (Native.RegisterHotKey(Handle, id, mods, (uint)hk.Key)) _ids.Add(id);
-                else failed.Add(hk.ToString());
+                else if (_hook == IntPtr.Zero) failed.Add(hk.ToString());
             }
             return failed;
         }
@@ -246,14 +263,61 @@ internal sealed class TrayApp : ApplicationContext
         {
             foreach (var id in _ids) Native.UnregisterHotKey(Handle, id);
             _ids.Clear();
+            _keys.Clear();
+            _swallowedVk = 0;
+        }
+
+        private static Keys CurrentModifiers()
+        {
+            static bool Down(int vk) => Native.GetAsyncKeyState(vk) < 0;
+            var m = Keys.None;
+            if (Down(0x11)) m |= Keys.Control;           // VK_CONTROL
+            if (Down(0x12)) m |= Keys.Alt;               // VK_MENU
+            if (Down(0x10)) m |= Keys.Shift;             // VK_SHIFT
+            if (Down(0x5B) || Down(0x5C)) m |= Keys.LWin; // VK_LWIN / VK_RWIN
+            return m;
+        }
+
+        private IntPtr HookProc(int nCode, IntPtr wParam, IntPtr lParam)
+        {
+            if (nCode >= 0 && _keys.Count > 0)
+            {
+                var k = Marshal.PtrToStructure<Native.KBDLLHOOKSTRUCT>(lParam);
+                int msg = (int)wParam;
+                if (msg is Native.WM_KEYDOWN or Native.WM_SYSKEYDOWN)
+                {
+                    if (_swallowedVk != 0 && k.vkCode == _swallowedVk) return 1; // auto-repeat
+                    var mods = CurrentModifiers();
+                    foreach (var (id, vk, want) in _keys)
+                    {
+                        if (vk != k.vkCode || want != mods) continue;
+                        _swallowedVk = vk;
+                        // Return immediately (Windows drops slow hooks); the capture starts from the message loop.
+                        Native.PostMessageW(Handle, WM_HOOK_HOTKEY, id, IntPtr.Zero);
+                        return 1;
+                    }
+                }
+                else if ((msg is Native.WM_KEYUP or Native.WM_SYSKEYUP) && k.vkCode == _swallowedVk)
+                {
+                    _swallowedVk = 0;
+                    return 1;
+                }
+            }
+            return Native.CallNextHookEx(_hook, nCode, wParam, lParam);
+        }
+
+        public override void DestroyHandle()
+        {
+            if (_hook != IntPtr.Zero) { Native.UnhookWindowsHookEx(_hook); _hook = IntPtr.Zero; }
+            base.DestroyHandle();
         }
 
         protected override void WndProc(ref Message m)
         {
-            if (m.Msg == Native.WM_HOTKEY)
+            if (m.Msg is Native.WM_HOTKEY or WM_HOOK_HOTKEY)
             {
                 int id = (int)m.WParam;
-                Log.Write($"WM_HOTKEY id={id}");
+                Log.Write($"{(m.Msg == WM_HOOK_HOTKEY ? "hook" : "WM_HOTKEY")} id={id}");
                 if (id is >= 1 and <= 4) _callback((CaptureMode)(id - 1));
             }
             base.WndProc(ref m);
