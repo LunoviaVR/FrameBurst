@@ -1,4 +1,4 @@
-# GpuShot
+# FrameBurst
 
 A ShareX-style tray screenshot tool built around one goal: capturing the highest-quality image possible,
 with every step done on the GPU (NVIDIA, AMD and Intel).
@@ -61,7 +61,7 @@ capture as screenshots (`--selftest <dir> --pickertest`).
 
 ### Output
 
-Screenshots are saved as lossless PNG to `Pictures\GpuShot` and copied to the clipboard as a DIB, a PNG,
+Screenshots are saved as lossless PNG to `Pictures\FrameBurst` and copied to the clipboard as a DIB, a PNG,
 and a file. Double-click the tray icon to open Settings. The **GPU** tab lists every adapter and display
 and includes a capture benchmark.
 
@@ -72,8 +72,8 @@ to open screen capture*.
 
 ```
 dotnet build -c Release
-bin\Release\net8.0-windows\GpuShot.exe
-bin\Release\net8.0-windows\GpuShot.exe --selftest <dir>   # headless end-to-end check
+bin\Release\net8.0-windows\FrameBurst.exe
+bin\Release\net8.0-windows\FrameBurst.exe --selftest <dir>   # headless end-to-end check
 ```
 
 Requires Windows 10 1803+ / 11, the .NET 8 runtime and a D3D11 GPU.

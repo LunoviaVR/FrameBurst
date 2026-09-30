@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.IO.Compression;
 
-namespace GpuShot.Imaging;
+namespace FrameBurst.Imaging;
 
 /// <summary>
 /// Lossless PNG writer tuned for screenshots:

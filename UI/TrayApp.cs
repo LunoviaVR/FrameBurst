@@ -1,10 +1,10 @@
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
-using GpuShot.Capture;
-using GpuShot.Win32;
+using FrameBurst.Capture;
+using FrameBurst.Win32;
 
-namespace GpuShot.UI;
+namespace FrameBurst.UI;
 
 internal enum CaptureMode { Region, AllMonitors, Monitor, ActiveWindow }
 
@@ -37,7 +37,7 @@ internal sealed class TrayApp : ApplicationContext
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) => ExitThread());
 
-        _tray = new NotifyIcon { Icon = AppIcon, Text = "GpuShot", ContextMenuStrip = menu, Visible = true };
+        _tray = new NotifyIcon { Icon = AppIcon, Text = "FrameBurst", ContextMenuStrip = menu, Visible = true };
         _tray.DoubleClick += (_, _) => ShowSettings();
         _tray.BalloonTipClicked += (_, _) => OpenLast();
 
@@ -62,7 +62,7 @@ internal sealed class TrayApp : ApplicationContext
             _tray.ShowBalloonTip(6000, "Some hotkeys are in use",
                 string.Join(", ", failed) + " could not be registered. Another app (or Windows' Snipping Tool PrintScreen setting) owns them. Change them in Settings.",
                 ToolTipIcon.Warning);
-        _tray.Text = "GpuShot — " + (_settings.RegionHotkey.IsEmpty ? "right-click to capture" : $"{_settings.RegionHotkey} to capture");
+        _tray.Text = "FrameBurst — " + (_settings.RegionHotkey.IsEmpty ? "right-click to capture" : $"{_settings.RegionHotkey} to capture");
     }
 
     private void OnHotkey(CaptureMode mode) => Trigger(mode, fromMenu: false);
@@ -144,7 +144,7 @@ internal sealed class TrayApp : ApplicationContext
             {
                 _settings = _settingsForm.Result;
                 try { _settings.Save(); }
-                catch (Exception ex) { MessageBox.Show("Could not save settings: " + ex.Message, "GpuShot"); }
+                catch (Exception ex) { MessageBox.Show("Could not save settings: " + ex.Message, "FrameBurst"); }
             }
         }
         _settingsForm = null;
@@ -230,7 +230,7 @@ internal sealed class TrayApp : ApplicationContext
         public HotkeyWindow(Action<CaptureMode> callback)
         {
             _callback = callback;
-            CreateHandle(new CreateParams { Caption = "GpuShotHotkeys", Parent = new IntPtr(-3) /* HWND_MESSAGE */ });
+            CreateHandle(new CreateParams { Caption = "FrameBurstHotkeys", Parent = new IntPtr(-3) /* HWND_MESSAGE */ });
         }
 
         public List<string> Register(IEnumerable<(CaptureMode Mode, Hotkey Key)> keys)

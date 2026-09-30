@@ -1,7 +1,7 @@
 using System.Drawing;
 using System.Runtime.InteropServices;
 
-namespace GpuShot.Win32;
+namespace FrameBurst.Win32;
 
 internal static partial class Native
 {

@@ -1,8 +1,8 @@
 using System.Diagnostics;
 using System.Text;
-using GpuShot.Capture;
+using FrameBurst.Capture;
 
-namespace GpuShot.UI;
+namespace FrameBurst.UI;
 
 internal sealed class SettingsForm : Form
 {
@@ -32,7 +32,7 @@ internal sealed class SettingsForm : Form
 
         AutoScaleDimensions = new SizeF(96f, 96f);
         AutoScaleMode = AutoScaleMode.Dpi;
-        Text = "GpuShot Settings";
+        Text = "FrameBurst Settings";
         Font = new Font("Segoe UI", 9f);
         FormBorderStyle = FormBorderStyle.Sizable;
         MinimizeBox = MaximizeBox = false;

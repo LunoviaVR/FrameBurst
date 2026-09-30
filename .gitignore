@@ -60,10 +60,10 @@ coverage*.xml
 *.dmp
 
 # ---------------------------------------------------------------------------
-# GpuShot output from self-tests or local runs
+# FrameBurst output from self-tests or local runs
 # ---------------------------------------------------------------------------
 selftest.log
-gpushot.log
+frameburst.log
 *.gss
 
 # ---------------------------------------------------------------------------

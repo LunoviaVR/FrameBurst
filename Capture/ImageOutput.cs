@@ -3,10 +3,10 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO.Compression;
 using System.Runtime.InteropServices;
-using GpuShot.Imaging;
-using GpuShot.Win32;
+using FrameBurst.Imaging;
+using FrameBurst.Win32;
 
-namespace GpuShot.Capture;
+namespace FrameBurst.Capture;
 
 public sealed class SavedCapture
 {
@@ -147,7 +147,7 @@ public static class ImageOutput
         }
         var name = sb.ToString();
         foreach (var c in Path.GetInvalidFileNameChars()) name = name.Replace(c, '_');
-        return string.IsNullOrWhiteSpace(name) ? "GpuShot" : name;
+        return string.IsNullOrWhiteSpace(name) ? "FrameBurst" : name;
     }
 
     private static string Unique(string basePath, string ext)

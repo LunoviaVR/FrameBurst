@@ -4,7 +4,7 @@ using SharpGen.Runtime;
 using Vortice.Direct3D11;
 using Vortice.DXGI;
 
-namespace GpuShot.Capture;
+namespace FrameBurst.Capture;
 
 public sealed record OutputInfo(string DeviceName, Rectangle Bounds, string Gpu, GpuVendor Vendor, uint BitsPerColor, string Rotation);
 

@@ -2,10 +2,10 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Drawing.Text;
-using GpuShot.Capture;
-using GpuShot.Win32;
+using FrameBurst.Capture;
+using FrameBurst.Win32;
 
-namespace GpuShot.UI;
+namespace FrameBurst.UI;
 
 /// <summary>
 /// Stand-alone screen colour picker (opened from the tray menu). Shows the frozen screen with a magnifier;
@@ -53,7 +53,7 @@ internal sealed class ColorPicker : Form
         KeyPreview = true;
         Cursor = Cursors.Cross;
         Bounds = _virtual;
-        Text = "GpuShot colour picker";
+        Text = "FrameBurst colour picker";
         SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.Opaque, true);
     }
 

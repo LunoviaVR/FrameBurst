@@ -4,7 +4,7 @@ using System.Drawing.Imaging;
 using System.Drawing.Text;
 using System.Runtime.InteropServices;
 
-namespace GpuShot.UI;
+namespace FrameBurst.UI;
 
 internal enum Tool { Select, Pen, Highlighter, Arrow, Rectangle, Text, Blur }
 

@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace GpuShot;
+namespace FrameBurst;
 
 public enum PngCompression { Fast = 0, Balanced = 1, Smallest = 2 }
 
@@ -32,8 +32,8 @@ public sealed class Settings
     public Hotkey WindowHotkey { get; set; } = new() { Key = Keys.Snapshot, Modifiers = Keys.Alt };
 
     // Output
-    public string OutputFolder { get; set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "GpuShot");
-    public string FileNamePattern { get; set; } = "GpuShot_{yyyy-MM-dd_HH-mm-ss-fff}";
+    public string OutputFolder { get; set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "FrameBurst");
+    public string FileNamePattern { get; set; } = "FrameBurst_{yyyy-MM-dd_HH-mm-ss-fff}";
     public bool SaveToFile { get; set; } = true;
     public bool CopyToClipboard { get; set; } = true;
     public bool ShowNotification { get; set; } = true;
@@ -44,7 +44,7 @@ public sealed class Settings
     public int CaptureDelayMs { get; set; } = 0;
 
     [JsonIgnore]
-    public static string SettingsPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "GpuShot", "settings.json");
+    public static string SettingsPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FrameBurst", "settings.json");
 
     private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true, Converters = { new JsonStringEnumConverter() } };
 
@@ -54,9 +54,31 @@ public sealed class Settings
         {
             if (File.Exists(SettingsPath))
                 return JsonSerializer.Deserialize<Settings>(File.ReadAllText(SettingsPath), JsonOpts) ?? new Settings();
+            if (MigrateFromOldName() is { } migrated) return migrated;
         }
         catch { /* fall back to defaults on a corrupt file */ }
         return new Settings();
+    }
+
+    /// <summary>
+    /// One-time import of settings saved under the program's previous name (GpuShot). The old folder is left
+    /// untouched. Old default paths and file names are switched to the new name; custom ones are kept as-is.
+    /// </summary>
+    private static Settings? MigrateFromOldName()
+    {
+        const string OldName = "GpuShot";
+        string oldPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), OldName, "settings.json");
+        if (!File.Exists(oldPath)) return null;
+        var s = JsonSerializer.Deserialize<Settings>(File.ReadAllText(oldPath), JsonOpts);
+        if (s == null) return null;
+
+        var defaults = new Settings();
+        string oldDefaultFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), OldName);
+        if (string.Equals(s.OutputFolder, oldDefaultFolder, StringComparison.OrdinalIgnoreCase)) s.OutputFolder = defaults.OutputFolder;
+        if (s.FileNamePattern.StartsWith(OldName + "_", StringComparison.Ordinal))
+            s.FileNamePattern = "FrameBurst_" + s.FileNamePattern[(OldName.Length + 1)..];
+        s.Save();
+        return s;
     }
 
     public void Save()

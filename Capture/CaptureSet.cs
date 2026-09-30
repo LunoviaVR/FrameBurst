@@ -1,6 +1,6 @@
 using System.Drawing;
 
-namespace GpuShot.Capture;
+namespace FrameBurst.Capture;
 
 /// <summary>One monitor's processed frame, already in desktop orientation and in CPU memory.</summary>
 public sealed class MonitorFrame

@@ -1,4 +1,4 @@
-namespace GpuShot.UI;
+namespace FrameBurst.UI;
 
 /// <summary>Text box that records a key combination. Backspace/Delete clears it.</summary>
 internal sealed class HotkeyBox : TextBox

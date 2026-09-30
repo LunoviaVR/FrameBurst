@@ -3,10 +3,10 @@ using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Drawing.Text;
 using System.Runtime.InteropServices;
-using GpuShot.Capture;
-using GpuShot.Win32;
+using FrameBurst.Capture;
+using FrameBurst.Win32;
 
-namespace GpuShot.UI;
+namespace FrameBurst.UI;
 
 /// <summary>
 /// Full-virtual-desktop overlay showing the frozen capture, with an editing toolbar at the top centre of
@@ -91,7 +91,7 @@ internal sealed class RegionSelector : Form
         DoubleBuffered = true;
         Cursor = Cursors.Cross;
         Bounds = _virtual;
-        Text = "GpuShot region";
+        Text = "FrameBurst region";
         SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.Opaque, true);
 
         var cursor = Cursor.Position;

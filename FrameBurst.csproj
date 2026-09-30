@@ -9,11 +9,11 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <AssemblyName>GpuShot</AssemblyName>
-    <RootNamespace>GpuShot</RootNamespace>
+    <AssemblyName>FrameBurst</AssemblyName>
+    <RootNamespace>FrameBurst</RootNamespace>
     <Version>1.0.0</Version>
     <NoWarn>$(NoWarn);WFAC010</NoWarn>
-    <Product>GpuShot</Product>
+    <Product>FrameBurst</Product>
     <Description>GPU-accelerated screenshot tool</Description>
   </PropertyGroup>
 
@@ -23,7 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="Gpu\Shaders.hlsl" LogicalName="GpuShot.Shaders.hlsl" />
+    <EmbeddedResource Include="Gpu\Shaders.hlsl" LogicalName="FrameBurst.Shaders.hlsl" />
   </ItemGroup>
 
 </Project>

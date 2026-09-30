@@ -1,14 +1,14 @@
-﻿using System.Drawing;
+using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO.Compression;
 using System.Text;
-using GpuShot.Capture;
-using GpuShot.Imaging;
+using FrameBurst.Capture;
+using FrameBurst.Imaging;
 
-namespace GpuShot;
+namespace FrameBurst;
 
 /// <summary>
-/// `GpuShot.exe --selftest [outputDir]` â€” headless end-to-end check: enumerate GPUs, capture every monitor,
+/// `FrameBurst.exe --selftest [outputDir]` â€” headless end-to-end check: enumerate GPUs, capture every monitor,
 /// verify the PNG encoder round-trips bit-exactly, write all output formats and report timings.
 /// </summary>
 internal static class SelfTest
@@ -52,7 +52,7 @@ internal static class SelfTest
             var tb = ov.Controls.OfType<TextBox>().FirstOrDefault();
             if (tb != null)
             {
-                foreach (char ch in "GpuShot annotation") SendMessage(tb.Handle, WM_CHAR, (IntPtr)ch, IntPtr.Zero);
+                foreach (char ch in "FrameBurst annotation") SendMessage(tb.Handle, WM_CHAR, (IntPtr)ch, IntPtr.Zero);
                 SendMessage(tb.Handle, WM_KEYDOWN, (IntPtr)(int)Keys.Enter, IntPtr.Zero);
             }
 
@@ -291,7 +291,7 @@ internal static class SelfTest
 
     public static int Run(string[] args)
     {
-        string dir = args.Length > 0 ? args[0] : Path.Combine(Path.GetTempPath(), "GpuShotSelfTest");
+        string dir = args.Length > 0 ? args[0] : Path.Combine(Path.GetTempPath(), "FrameBurstSelfTest");
         Directory.CreateDirectory(dir);
         var log = new StringBuilder();
         void W(string s) { log.AppendLine(s); Console.WriteLine(s); }

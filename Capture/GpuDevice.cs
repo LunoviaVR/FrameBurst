@@ -5,7 +5,7 @@ using Vortice.Direct3D;
 using Vortice.Direct3D11;
 using Vortice.DXGI;
 
-namespace GpuShot.Capture;
+namespace FrameBurst.Capture;
 
 public enum GpuVendor { Unknown, Nvidia, Amd, Intel, Microsoft, Qualcomm }
 
@@ -75,7 +75,7 @@ internal sealed class GpuDevice : IDisposable
 
     private static byte[] CompileShaders()
     {
-        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("GpuShot.Shaders.hlsl")
+        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("FrameBurst.Shaders.hlsl")
             ?? throw new InvalidOperationException("Embedded shader source missing.");
         string src = new StreamReader(stream).ReadToEnd();
         const ShaderFlags flags = ShaderFlags.OptimizationLevel3 | ShaderFlags.EnableStrictness;

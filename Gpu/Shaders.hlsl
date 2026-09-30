@@ -1,4 +1,4 @@
-// GpuShot compute shader (Shader Model 5.0 — runs on any D3D11 FL11 GPU: NVIDIA, AMD, Intel).
+// FrameBurst compute shader (Shader Model 5.0 — runs on any D3D11 FL11 GPU: NVIDIA, AMD, Intel).
 //
 // Input : the desktop surface from DXGI Desktop Duplication, either
 //         B8G8R8A8_UNORM (sRGB-encoded, passed through bit-exactly) or

@@ -1,10 +1,10 @@
-namespace GpuShot;
+namespace FrameBurst;
 
-/// <summary>Append-only diagnostic log at %AppData%\GpuShot\gpushot.log (trimmed when it grows past 1 MB).</summary>
+/// <summary>Append-only diagnostic log at %AppData%\FrameBurst\frameburst.log (trimmed when it grows past 1 MB).</summary>
 internal static class Log
 {
     private static readonly object Gate = new();
-    public static string PathName => System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "GpuShot", "gpushot.log");
+    public static string PathName => System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FrameBurst", "frameburst.log");
 
     public static void Write(string message)
     {
