@@ -20,6 +20,8 @@ internal sealed class TrayApp : ApplicationContext
     private bool _busy;
     private string? _lastFile;
     private SettingsForm? _settingsForm;
+    // A left click on the tray icon captures a region after this delay.
+    private readonly System.Windows.Forms.Timer _clickTimer = new() { Interval = 1000 };
 
     public TrayApp()
     {
@@ -38,7 +40,8 @@ internal sealed class TrayApp : ApplicationContext
         menu.Items.Add("Exit", null, (_, _) => ExitThread());
 
         _tray = new NotifyIcon { Icon = AppIcon, Text = "FrameBurst", ContextMenuStrip = menu, Visible = true };
-        _tray.DoubleClick += (_, _) => ShowSettings();
+        _tray.MouseClick += (_, e) => { if (e.Button == MouseButtons.Left) { _clickTimer.Stop(); _clickTimer.Start(); } };
+        _clickTimer.Tick += (_, _) => { _clickTimer.Stop(); Trigger(CaptureMode.Region, fromMenu: true); };
         _tray.BalloonTipClicked += (_, _) => OpenLast();
 
         _hotkeys = new HotkeyWindow(OnHotkey);
@@ -196,6 +199,7 @@ internal sealed class TrayApp : ApplicationContext
         _hotkeys.UnregisterAll();
         _hotkeys.DestroyHandle();
         _tray.Visible = false;
+        _clickTimer.Dispose();
         _tray.Dispose();
         _capturer.Dispose();
         base.ExitThreadCore();

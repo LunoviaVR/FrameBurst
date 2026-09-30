@@ -39,9 +39,9 @@ internal struct ShaderParams
 }
 
 /// <summary>
-/// A D3D11 device bound to one physical adapter. Desktop Duplication must run on the adapter that
-/// scans out the monitor, so each GPU in the system (NVIDIA / AMD / Intel) gets its own device and
-/// processes the monitors it owns.
+/// A D3D11 device bound to one physical adapter. Each monitor is captured on the GPU that scans it out,
+/// so each GPU in the system (NVIDIA / AMD / Intel) gets its own device and processes the monitors it
+/// owns without a cross-adapter copy.
 /// </summary>
 internal sealed class GpuDevice : IDisposable
 {
@@ -55,6 +55,10 @@ internal sealed class GpuDevice : IDisposable
     public ID3D11ComputeShader ConvertShader { get; }
     public ID3D11Buffer ConstantBuffer { get; }
 
+    private Windows.Graphics.DirectX.Direct3D11.IDirect3DDevice? _winRtDevice;
+    /// <summary>The same device wrapped for Windows Graphics Capture frame pools.</summary>
+    public Windows.Graphics.DirectX.Direct3D11.IDirect3DDevice WinRtDevice => _winRtDevice ??= WgcCapture.CreateWinRtDevice(Device);
+
     public GpuDevice(IDXGIAdapter1 adapter)
     {
         var desc = adapter.Description1;
@@ -67,6 +71,9 @@ internal sealed class GpuDevice : IDisposable
         Device = device;
         Context = ctx;
         FeatureLevel = fl;
+
+        // Windows Graphics Capture touches the device from its own threads.
+        using (var mt = Context.QueryInterface<ID3D11Multithread>()) mt.SetMultithreadProtected(true);
 
         ConvertShader = Device.CreateComputeShader(Bytecode.Value);
 
@@ -87,6 +94,7 @@ internal sealed class GpuDevice : IDisposable
 
     public void Dispose()
     {
+        _winRtDevice?.Dispose();
         ConstantBuffer.Dispose();
         ConvertShader.Dispose();
         Context.ClearState();

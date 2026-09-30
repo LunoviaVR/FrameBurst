@@ -11,17 +11,13 @@ public sealed record OutputInfo(string DeviceName, Rectangle Bounds, string Gpu,
 public sealed record AdapterInfo(string Name, GpuVendor Vendor, ulong VramBytes, uint VendorId, uint DeviceId, List<OutputInfo> Outputs);
 
 /// <summary>
-/// Captures every monitor with DXGI Desktop Duplication (a zero-copy GPU surface straight from the DWM
-/// compositor), converts it to 8-bit sRGB on the GPU with a compute shader and reads back only the final pixels.
+/// Captures every monitor with Windows Graphics Capture (a GPU surface straight from the DWM compositor),
+/// converts it to 8-bit sRGB on the GPU with a compute shader and reads back only the final pixels.
 /// </summary>
 public sealed class DesktopCapturer : IDisposable
 {
     private readonly Dictionary<string, GpuDevice> _devices = new();
     private readonly object _lock = new();
-
-    // Prefer the compositor's FP16 surface when it composes in FP16 (Windows Auto Color Management does this
-    // even on SDR displays); otherwise DXGI hands us the exact BGRA8 surface.
-    private static readonly Format[] SurfaceFormats = { Format.R16G16B16A16_Float, Format.B8G8R8A8_UNorm };
 
     public static List<AdapterInfo> EnumerateAdapters()
     {
@@ -68,13 +64,14 @@ public sealed class DesktopCapturer : IDisposable
     public void WarmUp()
     {
         GpuDevice.WarmUp();
+        WgcCapture.WarmUp();
         lock (_lock)
         {
             using var factory = DXGI.CreateDXGIFactory1<IDXGIFactory1>();
             for (uint ai = 0; factory.EnumAdapters1(ai, out var adapter).Success; ai++)
                 using (adapter)
                 {
-                    if (adapter.EnumOutputs(0, out var o).Success) { o.Dispose(); GetDevice(adapter); }
+                    if (adapter.EnumOutputs(0, out var o).Success) { o.Dispose(); _ = GetDevice(adapter).WinRtDevice; }
                 }
         }
     }
@@ -131,8 +128,9 @@ public sealed class DesktopCapturer : IDisposable
 
         try
         {
-            // ---- 1. Acquire every monitor's current desktop surface on its own GPU ----------------
-            var acquired = new List<(GpuDevice Dev, OutputInfo Info, ID3D11Texture2D Tex)>();
+            // ---- 1. Grab every monitor's current frame from the compositor, each on its own GPU -------
+            if (!WgcCapture.IsSupported) throw new PlatformNotSupportedException("Windows Graphics Capture is not available on this system.");
+            var targets = new List<(GpuDevice Dev, OutputInfo Info)>();
             var acquire = Stopwatch.StartNew();
             using (var factory = DXGI.CreateDXGIFactory1<IDXGIFactory1>())
             {
@@ -146,19 +144,19 @@ public sealed class DesktopCapturer : IDisposable
                             using (output)
                             {
                                 var info = Describe(output, ad.Description.Trim(), GpuVendors.FromId(ad.VendorId));
-                                if (info == null) continue;
-                                var dev = GetDevice(adapter);
-                                var tex = AcquireSurface(dev, output);
-                                if (tex == null) continue;
-                                acquired.Add((dev, info, tex));
+                                if (info != null) targets.Add((GetDevice(adapter), info));
                             }
                         }
                     }
                 }
             }
+            var textures = WgcCapture.CaptureMonitors(targets.Select(t => (t.Dev, MonitorOf(t.Info))).ToList());
+            var acquired = new List<(GpuDevice Dev, OutputInfo Info, ID3D11Texture2D Tex)>();
+            for (int i = 0; i < targets.Count; i++)
+                if (textures[i] is { } tex) acquired.Add((targets[i].Dev, targets[i].Info, tex));
             timings.AcquireMs = acquire.Elapsed.TotalMilliseconds;
             if (acquired.Count == 0)
-                throw new InvalidOperationException("No monitor could be captured. (Secure desktop, UAC prompt, or a full-screen exclusive app may be blocking Desktop Duplication.)");
+                throw new InvalidOperationException("No monitor could be captured. (The secure desktop, such as a UAC prompt or the lock screen, cannot be captured.)");
 
             // ---- 2. GPU pass: rotation + conversion to 8-bit sRGB -----------------------------------
             var gpu = Stopwatch.StartNew();
@@ -195,75 +193,6 @@ public sealed class DesktopCapturer : IDisposable
         }
     }
 
-    private static ID3D11Texture2D? AcquireSurface(GpuDevice dev, IDXGIOutput output)
-    {
-        IDXGIOutputDuplication? dup = null;
-        try
-        {
-            // DuplicateOutput1 is required: when DWM composes in FP16 the legacy DuplicateOutput returns
-            // *linear* values stored as 8-bit without the sRGB encoding, which makes every capture much too
-            // dark. The FP16 surface is linear, and the shader encodes it to sRGB exactly.
-            using (var o5 = output.QueryInterfaceOrNull<IDXGIOutput5>())
-            {
-                if (o5 != null)
-                {
-                    try { dup = o5.DuplicateOutput1(dev.Device, SurfaceFormats); }
-                    catch (SharpGenException) { dup = null; }
-                }
-            }
-            if (dup == null)
-            {
-                using var o1 = output.QueryInterface<IDXGIOutput1>();
-                dup = o1.DuplicateOutput(dev.Device);
-            }
-        }
-        catch (SharpGenException ex) when (ex.ResultCode == Vortice.DXGI.ResultCode.NotCurrentlyAvailable ||
-                                           ex.ResultCode == Vortice.DXGI.ResultCode.Unsupported ||
-                                           ex.ResultCode.Code == unchecked((int)0x80070005)) // E_ACCESSDENIED (secure desktop)
-        {
-            dup?.Dispose();
-            return null;
-        }
-
-        Log.Write($"duplicate format={dup.Description.ModeDescription.Format} rot={dup.Description.Rotation} inSysMem={(bool)dup.Description.DesktopImageInSystemMemory}");
-        using (dup)
-        {
-            // Only a frame with LastPresentTime != 0 carries a desktop image. Frames that report just a mouse
-            // move (LastPresentTime == 0) can arrive first and their surface may still be empty/black, so
-            // they are skipped. A fresh duplication delivers the current desktop image right away, so this
-            // normally takes one or two calls.
-            var deadline = Stopwatch.StartNew();
-            for (int attempt = 0; deadline.ElapsedMilliseconds < 1000; attempt++)
-            {
-                var hr = dup.AcquireNextFrame(100u, out var frameInfo, out var resource);
-                Log.Write($"  acquire #{attempt}: hr=0x{hr.Code:X8} present={frameInfo.LastPresentTime} mouse={frameInfo.LastMouseUpdateTime} accum={frameInfo.AccumulatedFrames} protectedMasked={(bool)frameInfo.ProtectedContentMaskedOut}");
-                if (hr == Vortice.DXGI.ResultCode.WaitTimeout) continue;
-                if (hr == Vortice.DXGI.ResultCode.AccessLost) return null;
-                hr.CheckError();
-
-                try
-                {
-                    using (resource)
-                    {
-                        if (frameInfo.LastPresentTime == 0) continue;
-                        using var tex = resource.QueryInterface<ID3D11Texture2D>();
-                        var d = tex.Description;
-                        var copy = dev.Device.CreateTexture2D(new Texture2DDescription(d.Format, d.Width, d.Height, 1, 1,
-                            BindFlags.ShaderResource, ResourceUsage.Default, CpuAccessFlags.None, 1, 0, ResourceOptionFlags.None));
-                        dev.Context.CopyResource(copy, tex);
-                        return copy;
-                    }
-                }
-                finally
-                {
-                    dup.ReleaseFrame();
-                }
-            }
-            Log.Write("  no desktop image received within 1 s");
-            return null;
-        }
-    }
-
     private static Pending Dispatch(GpuDevice dev, OutputInfo info, ID3D11Texture2D src)
     {
         var ctx = dev.Context;
@@ -286,7 +215,7 @@ public sealed class DesktopCapturer : IDisposable
         var prm = new ShaderParams
         {
             SrcIsFloat = src.Description.Format == Format.R16G16B16A16_Float ? 1u : 0u,
-            Rotation = (uint)RotationOf(info),
+            Rotation = (uint)ModeRotation.Identity, // WGC frames are already in desktop orientation
             OutW = (uint)w, OutH = (uint)h,
         };
         ctx.UpdateSubresource(in prm, dev.ConstantBuffer);
@@ -309,8 +238,11 @@ public sealed class DesktopCapturer : IDisposable
         return p;
     }
 
-    private static ModeRotation RotationOf(OutputInfo info) =>
-        Enum.TryParse<ModeRotation>(info.Rotation, out var r) ? r : ModeRotation.Identity;
+    private static IntPtr MonitorOf(OutputInfo info)
+    {
+        var b = info.Bounds;
+        return Win32.Native.MonitorFromPoint(new Win32.Native.POINT { X = b.Left + b.Width / 2, Y = b.Top + b.Height / 2 }, Win32.Native.MONITOR_DEFAULTTONULL);
+    }
 
     private static unsafe byte[] ReadBack(ID3D11DeviceContext ctx, ID3D11Texture2D staging, int w, int h)
     {
