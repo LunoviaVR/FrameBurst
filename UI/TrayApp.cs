@@ -23,6 +23,10 @@ internal sealed class TrayApp : ApplicationContext
     private SettingsForm? _settingsForm;
     // A left click on the tray icon captures a region after this delay.
     private readonly System.Windows.Forms.Timer _clickTimer = new() { Interval = 1000 };
+    // Automatic update checks: shortly after start-up, then every few hours (at most once a day hits GitHub).
+    private readonly System.Windows.Forms.Timer _updateTimer = new() { Interval = 15_000 };
+    private Action? _balloonAction;
+    private bool _updating;
 
     public TrayApp()
     {
@@ -37,13 +41,17 @@ internal sealed class TrayApp : ApplicationContext
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Open screenshot folder", null, (_, _) => OpenFolder());
         menu.Items.Add("Settings…", null, (_, _) => ShowSettings());
+        menu.Items.Add("Check for updates…", null, (_, _) => CheckForUpdates(manual: true));
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) => ExitThread());
 
         _tray = new NotifyIcon { Icon = AppIcon, Text = "FrameBurst", ContextMenuStrip = menu, Visible = true };
         _tray.MouseClick += (_, e) => { if (e.Button == MouseButtons.Left) { _clickTimer.Stop(); _clickTimer.Start(); } };
         _clickTimer.Tick += (_, _) => { _clickTimer.Stop(); Trigger(CaptureMode.Region, fromMenu: true); };
-        _tray.BalloonTipClicked += (_, _) => OpenLast();
+        _tray.BalloonTipClicked += (_, _) => _balloonAction?.Invoke();
+        _tray.BalloonTipClosed += (_, _) => _balloonAction = null;
+        _updateTimer.Tick += (_, _) => { _updateTimer.Interval = 4 * 60 * 60 * 1000; CheckForUpdates(manual: false); };
+        _updateTimer.Start();
 
         _hotkeys = new HotkeyWindow(OnHotkey);
         RegisterHotkeys(showErrors: true);
@@ -113,6 +121,7 @@ internal sealed class TrayApp : ApplicationContext
                 var r = saved.Area;
                 string where = saved.FilePath != null ? Path.GetFileName(saved.FilePath) : "Copied to clipboard";
                 var gpus = string.Join(", ", set.Monitors.Where(m => m.Bounds.IntersectsWith(r)).Select(m => GpuVendors.Label(m.Vendor)).Distinct());
+                _balloonAction = OpenLast;
                 _tray.ShowBalloonTip(3000, $"Captured {r.Width} × {r.Height}  ·  {gpus} GPU",
                     $"{where}\nGPU capture {set.Timings.TotalMs:0} ms · encode {saved.EncodeMs:0} ms", ToolTipIcon.None);
             }
@@ -153,6 +162,68 @@ internal sealed class TrayApp : ApplicationContext
         }
         _settingsForm = null;
         RegisterHotkeys(showErrors: true);
+    }
+
+    private async void CheckForUpdates(bool manual)
+    {
+        if (_updating) return;
+        if (!manual && (!_settings.CheckForUpdates || DateTime.UtcNow - _settings.LastUpdateCheckUtc < TimeSpan.FromHours(24))) return;
+        _updating = true;
+        UpdateInfo? found = null;
+        try
+        {
+            UpdateInfo? update;
+            try { update = await Updater.CheckAsync(); }
+            catch (Exception ex)
+            {
+                Log.Write("update check failed: " + ex.Message);
+                if (manual) MessageBox.Show("Could not check for updates:\n" + ex.Message, "FrameBurst", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            _settings.LastUpdateCheckUtc = DateTime.UtcNow;
+            try { _settings.Save(); } catch { /* not important */ }
+
+            if (update == null)
+            {
+                if (manual) MessageBox.Show($"FrameBurst {Updater.Current} is the latest version.", "FrameBurst", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            if (manual) { found = update; return; }
+            _balloonAction = () => PromptUpdate(update);
+            _tray.ShowBalloonTip(10000, $"FrameBurst {update.Version} is available", "Click here to update.", ToolTipIcon.Info);
+        }
+        finally { _updating = false; }
+        if (found != null) PromptUpdate(found);
+    }
+
+    private async void PromptUpdate(UpdateInfo update)
+    {
+        if (_updating) return;
+        string notes = update.Notes.Length > 1200 ? update.Notes[..1200] + "…" : update.Notes;
+        if (!Updater.IsInstalled || update.InstallerUrl == null)
+        {
+            // A copy run from a build folder isn't managed by the installer, so just show the release.
+            if (MessageBox.Show($"FrameBurst {update.Version} is available (you have {Updater.Current}).\n\n{notes}\n\nOpen the download page?",
+                    "FrameBurst update", MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
+                Process.Start(new ProcessStartInfo(update.PageUrl) { UseShellExecute = true });
+            return;
+        }
+        if (MessageBox.Show($"FrameBurst {update.Version} is available (you have {Updater.Current}).\n\n{notes}\n\nDownload and install it now? FrameBurst will restart.",
+                "FrameBurst update", MessageBoxButtons.YesNo, MessageBoxIcon.Information) != DialogResult.Yes) return;
+
+        _updating = true;
+        _tray.ShowBalloonTip(3000, "Downloading update…", $"FrameBurst {update.Version}", ToolTipIcon.None);
+        try
+        {
+            await Updater.InstallAsync(update);
+            ExitThread(); // the installer replaces the files and restarts FrameBurst
+        }
+        catch (Exception ex)
+        {
+            Log.Write("update failed: " + ex);
+            MessageBox.Show("The update failed:\n" + ex.Message, "FrameBurst", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        finally { _updating = false; }
     }
 
     /// <summary>Tray tool: freeze the screen, let the user click a pixel, copy its #RRGGBB to the clipboard.</summary>
@@ -201,6 +272,7 @@ internal sealed class TrayApp : ApplicationContext
         _hotkeys.DestroyHandle();
         _tray.Visible = false;
         _clickTimer.Dispose();
+        _updateTimer.Dispose();
         _tray.Dispose();
         _capturer.Dispose();
         base.ExitThreadCore();

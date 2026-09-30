@@ -17,6 +17,7 @@ internal sealed class SettingsForm : Form
     private readonly CheckBox _save = new() { Text = "Save to file", AutoSize = true };
     private readonly CheckBox _clip = new() { Text = "Copy to clipboard", AutoSize = true };
     private readonly CheckBox _notify = new() { Text = "Show notification", AutoSize = true };
+    private readonly CheckBox _autoUpdate = new() { Text = "Check for updates automatically", AutoSize = true };
     private readonly ComboBox _png = Combo("Fast (largest files)", "Balanced", "Smallest (slowest)");
 
 
@@ -65,6 +66,18 @@ internal sealed class SettingsForm : Form
             ("Folder", folderRow), ("File name", _pattern), ("", patternNote),
             ("", _save), ("", _clip), ("", _notify),
             ("PNG compression", _png), ("", Note("PNG is lossless at every setting: this only trades file size for speed.")))));
+
+        var releases = new LinkLabel { Text = "Release notes", AutoSize = true, Margin = new Padding(3, 0, 3, 8) };
+        releases.LinkClicked += (_, _) =>
+        {
+            try { Process.Start(new ProcessStartInfo(Updater.ReleasesPage) { UseShellExecute = true }); }
+            catch (Exception ex) { MessageBox.Show(this, ex.Message, "FrameBurst", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+        };
+        tabs.TabPages.Add(Page("Updates", Grid(
+            ("Version", new Label { Text = Updater.Current.ToString(), AutoSize = true, Margin = new Padding(3, 7, 3, 3) }),
+            ("", _autoUpdate),
+            ("", Note("FrameBurst checks GitHub once a day and asks before installing anything.\nYou can also check any time from the tray menu (Check for updates…).")),
+            ("", releases))));
 
 
         var ok = new Button { Text = "Save", DialogResult = DialogResult.OK, AutoSize = true };
@@ -120,6 +133,7 @@ internal sealed class SettingsForm : Form
         _folder.Text = _s.OutputFolder; _pattern.Text = _s.FileNamePattern;
         _save.Checked = _s.SaveToFile; _clip.Checked = _s.CopyToClipboard; _notify.Checked = _s.ShowNotification;
         _png.SelectedIndex = (int)_s.PngCompression;
+        _autoUpdate.Checked = _s.CheckForUpdates;
     }
 
     private void Commit()
@@ -130,5 +144,6 @@ internal sealed class SettingsForm : Form
         _s.OutputFolder = _folder.Text.Trim(); _s.FileNamePattern = _pattern.Text.Trim();
         _s.SaveToFile = _save.Checked; _s.CopyToClipboard = _clip.Checked; _s.ShowNotification = _notify.Checked;
         _s.PngCompression = (PngCompression)_png.SelectedIndex;
+        _s.CheckForUpdates = _autoUpdate.Checked;
     }
 }

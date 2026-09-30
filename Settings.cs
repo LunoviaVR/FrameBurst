@@ -43,6 +43,10 @@ public sealed class Settings
     // Behaviour
     public int CaptureDelayMs { get; set; } = 0;
 
+    // Updates
+    public bool CheckForUpdates { get; set; } = true;
+    public DateTime LastUpdateCheckUtc { get; set; }
+
     [JsonIgnore]
     public static string SettingsPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FrameBurst", "settings.json");
 

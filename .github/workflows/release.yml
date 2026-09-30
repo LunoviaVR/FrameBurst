@@ -1,0 +1,37 @@
+# Publishes a GitHub release with the installer whenever a version tag is pushed:
+#   git tag v1.1.0
+#   git push origin v1.1.0
+# Installed copies of FrameBurst find the new release through the in-app updater.
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+
+      - name: Build installer
+        shell: pwsh
+        run: ./installer/build.ps1 -Version ('${{ github.ref_name }}'.TrimStart('v'))
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: publish/FrameBurst-Setup-*.exe
+          generate_release_notes: true
