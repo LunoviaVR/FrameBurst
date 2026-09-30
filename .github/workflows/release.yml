@@ -30,8 +30,17 @@ jobs:
         shell: pwsh
         run: ./installer/build.ps1 -Version ('${{ github.ref_name }}'.TrimStart('v'))
 
+      # Uses release-notes/<tag>.md as the release description when it exists.
+      - name: Find release notes
+        id: notes
+        shell: pwsh
+        run: |
+          $p = "release-notes/${{ github.ref_name }}.md"
+          if (Test-Path $p) { "path=$p" >> $env:GITHUB_OUTPUT }
+
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
           files: publish/FrameBurst-Setup-*.exe
-          generate_release_notes: true
+          body_path: ${{ steps.notes.outputs.path }}
+          generate_release_notes: ${{ steps.notes.outputs.path == '' }}
