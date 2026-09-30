@@ -138,7 +138,7 @@ internal sealed class TrayApp : ApplicationContext
     {
         if (_settingsForm != null) { _settingsForm.Activate(); return; }
         _hotkeys.UnregisterAll(); // so the hotkey boxes can receive the keys
-        using (_settingsForm = new SettingsForm(_settings, _capturer))
+        using (_settingsForm = new SettingsForm(_settings))
         {
             if (_settingsForm.ShowDialog() == DialogResult.OK)
             {

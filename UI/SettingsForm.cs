@@ -1,13 +1,8 @@
-using System.Diagnostics;
-using System.Text;
-using FrameBurst.Capture;
-
 namespace FrameBurst.UI;
 
 internal sealed class SettingsForm : Form
 {
     private readonly Settings _s;
-    private readonly DesktopCapturer _capturer;
 
     private readonly HotkeyBox _hkRegion = new(), _hkFull = new(), _hkMonitor = new(), _hkWindow = new();
     private readonly NumericUpDown _delay = new() { Maximum = 10000, Increment = 250, Width = 90 };
@@ -21,14 +16,12 @@ internal sealed class SettingsForm : Form
     private readonly ComboBox _png = Combo("Fast (largest files)", "Balanced", "Smallest (slowest)");
 
 
-    private readonly TextBox _gpuInfo = new() { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Both, WordWrap = false, Dock = DockStyle.Fill, Font = new Font("Consolas", 9f) };
 
     public Settings Result => _s;
 
-    public SettingsForm(Settings settings, DesktopCapturer capturer)
+    public SettingsForm(Settings settings)
     {
         _s = settings.Clone();
-        _capturer = capturer;
 
         AutoScaleDimensions = new SizeF(96f, 96f);
         AutoScaleMode = AutoScaleMode.Dpi;
@@ -60,16 +53,6 @@ internal sealed class SettingsForm : Form
             ("", _save), ("", _clip), ("", _notify),
             ("PNG compression", _png), ("", Note("PNG is lossless at every setting: this only trades file size for speed.")))));
 
-        var gpuPage = new TabPage("GPU") { Padding = new Padding(8) };
-        var gpuButtons = new FlowLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true, FlowDirection = FlowDirection.LeftToRight };
-        var refresh = new Button { Text = "Refresh", AutoSize = true };
-        var bench = new Button { Text = "Benchmark capture (10×)", AutoSize = true };
-        refresh.Click += (_, _) => LoadGpuInfo();
-        bench.Click += async (_, _) => await Benchmark(bench);
-        gpuButtons.Controls.AddRange(new Control[] { refresh, bench });
-        gpuPage.Controls.Add(_gpuInfo);
-        gpuPage.Controls.Add(gpuButtons);
-        tabs.TabPages.Add(gpuPage);
 
         var ok = new Button { Text = "Save", DialogResult = DialogResult.OK, AutoSize = true };
         var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, AutoSize = true };
@@ -83,7 +66,6 @@ internal sealed class SettingsForm : Form
         Controls.Add(bottom);
 
         LoadValues();
-        LoadGpuInfo();
     }
 
     private static ComboBox Combo(params string[] items)
@@ -135,65 +117,5 @@ internal sealed class SettingsForm : Form
         _s.OutputFolder = _folder.Text.Trim(); _s.FileNamePattern = _pattern.Text.Trim();
         _s.SaveToFile = _save.Checked; _s.CopyToClipboard = _clip.Checked; _s.ShowNotification = _notify.Checked;
         _s.PngCompression = (PngCompression)_png.SelectedIndex;
-    }
-
-    private void LoadGpuInfo()
-    {
-        var sb = new StringBuilder();
-        try
-        {
-            foreach (var a in DesktopCapturer.EnumerateAdapters())
-            {
-                sb.AppendLine($"[{GpuVendors.Label(a.Vendor)}] {a.Name}");
-                sb.AppendLine($"    PCI {a.VendorId:X4}:{a.DeviceId:X4}   VRAM {a.VramBytes / (1024.0 * 1024 * 1024):0.0} GB");
-                if (a.Outputs.Count == 0) sb.AppendLine("    (no displays attached — not used for capture)");
-                foreach (var o in a.Outputs)
-                {
-                    sb.AppendLine($"    {o.DeviceName}  {o.Bounds.Width}×{o.Bounds.Height} @ ({o.Bounds.X},{o.Bounds.Y})  rot {o.Rotation}");
-                    sb.AppendLine($"        {o.BitsPerColor} bits per colour");
-                }
-                sb.AppendLine();
-            }
-            sb.AppendLine("Each display is captured by the GPU that drives it (DXGI Desktop Duplication), and");
-            sb.AppendLine("converted there by D3D11 compute shaders — NVIDIA, AMD and Intel are all supported.");
-        }
-        catch (Exception ex) { sb.AppendLine("Failed to enumerate GPUs: " + ex.Message); }
-        _gpuInfo.Text = sb.ToString();
-    }
-
-    private async Task Benchmark(Button b)
-    {
-        b.Enabled = false;
-        try
-        {
-            var runs = await Task.Run(() =>
-            {
-                var list = new List<CaptureTimings>();
-                _capturer.CaptureAll(); // warm-up
-                for (int i = 0; i < 10; i++) list.Add(_capturer.CaptureAll().Timings);
-                return list;
-            });
-            var set = await Task.Run(() => _capturer.CaptureAll());
-            var sb = new StringBuilder(_gpuInfo.Text);
-            sb.AppendLine();
-            sb.AppendLine($"Benchmark — {set.Monitors.Count} display(s), {set.Monitors.Sum(m => (long)m.Bounds.Width * m.Bounds.Height) / 1e6:0.0} MP");
-            foreach (var m in set.Monitors)
-                sb.AppendLine($"    {m.DeviceName}: {GpuVendors.Label(m.Vendor)} {m.GpuName}");
-            sb.AppendLine($"    avg total  {runs.Average(r => r.TotalMs):0.0} ms   (min {runs.Min(r => r.TotalMs):0.0})");
-            sb.AppendLine($"    avg acquire {runs.Average(r => r.AcquireMs):0.0} ms,  GPU pass {runs.Average(r => r.GpuMs):0.0} ms,  readback {runs.Average(r => r.ReadbackMs):0.0} ms");
-            var shader = runs.Where(r => !double.IsNaN(r.GpuShaderMs)).ToList();
-            if (shader.Count > 0) sb.AppendLine($"    GPU shader execution (timestamp queries): {shader.Average(r => r.GpuShaderMs):0.000} ms");
-            _gpuInfo.Text = sb.ToString();
-            _gpuInfo.SelectionStart = _gpuInfo.TextLength;
-            _gpuInfo.ScrollToCaret();
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(this, ex.Message, "Benchmark failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-        }
-        finally
-        {
-            b.Enabled = true;
-        }
     }
 }

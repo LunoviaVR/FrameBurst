@@ -62,8 +62,7 @@ capture as screenshots (`--selftest <dir> --pickertest`).
 ### Output
 
 Screenshots are saved as lossless PNG to `Pictures\FrameBurst` and copied to the clipboard as a DIB, a PNG,
-and a file. Double-click the tray icon to open Settings. The **GPU** tab lists every adapter and display
-and includes a capture benchmark.
+and a file. Double-click the tray icon to open Settings.
 
 If PrintScreen won't register, turn off *Settings › Accessibility › Keyboard › Use the Print screen key
 to open screen capture*.
