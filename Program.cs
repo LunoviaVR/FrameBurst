@@ -21,7 +21,13 @@ internal static class Program
         Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
         Application.ThreadException += (_, e) =>
             MessageBox.Show(e.Exception.ToString(), "FrameBurst error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-        Application.Run(new TrayApp());
+        WinRT.ComWrappersSupport.InitializeComWrappers();
+        Microsoft.UI.Xaml.Application.Start(p =>
+        {
+            var queue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+            SynchronizationContext.SetSynchronizationContext(new Microsoft.UI.Dispatching.DispatcherQueueSynchronizationContext(queue));
+            _ = new App();
+        });
         return 0;
     }
 }

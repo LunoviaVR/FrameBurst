@@ -1,16 +1,21 @@
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
+using Windows.System;
+
 namespace FrameBurst.UI;
 
-/// <summary>Text box that records a key combination. Backspace/Delete clears it.</summary>
-internal sealed class HotkeyBox : TextBox
+/// <summary>Read-only text box that records a key combination. Backspace/Delete clears it.</summary>
+public sealed partial class HotkeyBox : Microsoft.UI.Xaml.Controls.TextBox
 {
     private Hotkey _value = new();
 
     public HotkeyBox()
     {
-        ReadOnly = true;
-        BackColor = SystemColors.Window;
-        ShortcutsEnabled = false;
-        Cursor = Cursors.Hand;
+        IsReadOnly = true;
+        PlaceholderText = "Press a key…";
+        PreviewKeyDown += OnPreviewKeyDown;
+        PreviewKeyUp += OnPreviewKeyUp;
+        LostFocus += (_, _) => Text = _value.ToString();
     }
 
     public Hotkey Value
@@ -19,49 +24,50 @@ internal sealed class HotkeyBox : TextBox
         set { _value = value; Text = value.ToString(); }
     }
 
-    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    private void OnPreviewKeyDown(object sender, KeyRoutedEventArgs e)
     {
-        // Capture everything, including Tab / Alt combos and PrintScreen.
-        HandleKey(keyData);
-        return true;
+        // Capture everything, including Tab, Alt combos and PrintScreen.
+        e.Handled = true;
+        HandleKey(e.Key);
     }
 
-    protected override bool IsInputKey(Keys keyData) => true;
-
-    protected override void OnKeyUp(KeyEventArgs e)
+    private void OnPreviewKeyUp(object sender, KeyRoutedEventArgs e)
     {
         // PrintScreen only arrives as KeyUp on many systems.
-        if (e.KeyCode == Keys.Snapshot) HandleKey(e.KeyData);
         e.Handled = true;
+        if (e.Key == VirtualKey.Snapshot) HandleKey(e.Key);
     }
 
-    private void HandleKey(Keys keyData)
+    private void HandleKey(VirtualKey vk)
     {
-        var key = keyData & Keys.KeyCode;
-        var mods = keyData & Keys.Modifiers;
+        var key = (Keys)(int)vk;
+        var mods = CurrentModifiers();
         if (key is Keys.Back or Keys.Delete && mods == Keys.None) { Value = new Hotkey(); return; }
-        if (key is Keys.ShiftKey or Keys.ControlKey or Keys.Menu or Keys.LWin or Keys.RWin or Keys.None)
+        if (key is Keys.ShiftKey or Keys.ControlKey or Keys.Menu or Keys.LWin or Keys.RWin or Keys.LShiftKey or Keys.RShiftKey
+            or Keys.LControlKey or Keys.RControlKey or Keys.LMenu or Keys.RMenu or Keys.None)
         {
             var parts = new List<string>();
             if (mods.HasFlag(Keys.Control)) parts.Add("Ctrl");
             if (mods.HasFlag(Keys.Alt)) parts.Add("Alt");
             if (mods.HasFlag(Keys.Shift)) parts.Add("Shift");
-            if (IsWinDown()) parts.Add("Win");
+            if (mods.HasFlag(Keys.LWin)) parts.Add("Win");
             if (parts.Count > 0) Text = string.Join(" + ", parts) + " + …";
             return;
         }
-        if (IsWinDown()) mods |= Keys.LWin;
         Value = new Hotkey { Key = key, Modifiers = mods };
     }
 
-    private static bool IsWinDown() => (GetKeyState(0x5B) & 0x8000) != 0 || (GetKeyState(0x5C) & 0x8000) != 0;
+    private static Keys CurrentModifiers()
+    {
+        static bool Down(int vk) => (GetKeyState(vk) & 0x8000) != 0;
+        var m = Keys.None;
+        if (Down(0x11)) m |= Keys.Control;
+        if (Down(0x12)) m |= Keys.Alt;
+        if (Down(0x10)) m |= Keys.Shift;
+        if (Down(0x5B) || Down(0x5C)) m |= Keys.LWin;
+        return m;
+    }
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern short GetKeyState(int vk);
-
-    protected override void OnLostFocus(EventArgs e)
-    {
-        base.OnLostFocus(e);
-        Text = _value.ToString();
-    }
 }

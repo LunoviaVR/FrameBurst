@@ -20,7 +20,8 @@ internal sealed class TrayApp : ApplicationContext
     private Settings _settings;
     private bool _busy;
     private string? _lastFile;
-    private SettingsForm? _settingsForm;
+    private SettingsWindow? _settingsWindow;
+    private TrayMenu? _menu;
     // A left click on the tray icon captures a region after this delay.
     private readonly System.Windows.Forms.Timer _clickTimer = new() { Interval = 1000 };
     // Automatic update checks: shortly after start-up, then every few hours (at most once a day hits GitHub).
@@ -32,20 +33,8 @@ internal sealed class TrayApp : ApplicationContext
     {
         _settings = Settings.Load();
 
-        var menu = new ContextMenuStrip();
-        menu.Items.Add("Capture region", null, (_, _) => Trigger(CaptureMode.Region, fromMenu: true));
-        menu.Items.Add("Capture all monitors", null, (_, _) => Trigger(CaptureMode.AllMonitors, fromMenu: true));
-        menu.Items.Add("Capture monitor under cursor", null, (_, _) => Trigger(CaptureMode.Monitor, fromMenu: true));
-        menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Pick screen colour", null, (_, _) => PickScreenColor());
-        menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Open screenshot folder", null, (_, _) => OpenFolder());
-        menu.Items.Add("Settings…", null, (_, _) => ShowSettings());
-        menu.Items.Add("Check for updates…", null, (_, _) => CheckForUpdates(manual: true));
-        menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Exit", null, (_, _) => ExitThread());
-
-        _tray = new NotifyIcon { Icon = AppIcon, Text = "FrameBurst", ContextMenuStrip = menu, Visible = true };
+        _tray = new NotifyIcon { Icon = AppIcon, Text = "FrameBurst", Visible = true };
+        _tray.MouseUp += (_, e) => { if (e.Button == MouseButtons.Right) ShowMenu(); };
         _tray.MouseClick += (_, e) => { if (e.Button == MouseButtons.Left) { _clickTimer.Stop(); _clickTimer.Start(); } };
         _clickTimer.Tick += (_, _) => { _clickTimer.Stop(); Trigger(CaptureMode.Region, fromMenu: true); };
         _tray.BalloonTipClicked += (_, _) => _balloonAction?.Invoke();
@@ -147,21 +136,36 @@ internal sealed class TrayApp : ApplicationContext
         return ok ? overlay.Result : null;
     }
 
+    private void ShowMenu()
+    {
+        static string? Key(Hotkey hk) => hk.IsEmpty ? null : hk.ToString();
+        var flyout = new Microsoft.UI.Xaml.Controls.MenuFlyout();
+        flyout.Items.Add(TrayMenu.Item("Capture region", "", () => Trigger(CaptureMode.Region, fromMenu: true), Key(_settings.RegionHotkey)));
+        flyout.Items.Add(TrayMenu.Item("Capture all monitors", "", () => Trigger(CaptureMode.AllMonitors, fromMenu: true), Key(_settings.FullscreenHotkey)));
+        flyout.Items.Add(TrayMenu.Item("Capture monitor under cursor", "", () => Trigger(CaptureMode.Monitor, fromMenu: true), Key(_settings.MonitorHotkey)));
+        flyout.Items.Add(new Microsoft.UI.Xaml.Controls.MenuFlyoutSeparator());
+        flyout.Items.Add(TrayMenu.Item("Pick screen colour", "", PickScreenColor));
+        flyout.Items.Add(new Microsoft.UI.Xaml.Controls.MenuFlyoutSeparator());
+        flyout.Items.Add(TrayMenu.Item("Open screenshot folder", "", OpenFolder));
+        flyout.Items.Add(TrayMenu.Item("Settings", "", ShowSettings));
+        flyout.Items.Add(TrayMenu.Item("Check for updates", "", () => CheckForUpdates(manual: true)));
+        flyout.Items.Add(new Microsoft.UI.Xaml.Controls.MenuFlyoutSeparator());
+        flyout.Items.Add(TrayMenu.Item("Exit", "", ExitThread));
+        (_menu ??= new TrayMenu()).Show(flyout);
+    }
+
     private void ShowSettings()
     {
-        if (_settingsForm != null) { _settingsForm.Activate(); return; }
+        if (_settingsWindow != null) { _settingsWindow.BringToFront(); return; }
         _hotkeys.UnregisterAll(); // so the hotkey boxes can receive the keys
-        using (_settingsForm = new SettingsForm(_settings))
+        _settingsWindow = new SettingsWindow(_settings, () => CheckForUpdates(manual: true));
+        _settingsWindow.Saved += s => _settings = s;
+        _settingsWindow.Closed += (_, _) =>
         {
-            if (_settingsForm.ShowDialog() == DialogResult.OK)
-            {
-                _settings = _settingsForm.Result;
-                try { _settings.Save(); }
-                catch (Exception ex) { MessageBox.Show("Could not save settings: " + ex.Message, "FrameBurst"); }
-            }
-        }
-        _settingsForm = null;
-        RegisterHotkeys(showErrors: true);
+            _settingsWindow = null;
+            RegisterHotkeys(showErrors: true);
+        };
+        _settingsWindow.BringToFront();
     }
 
     private async void CheckForUpdates(bool manual)
@@ -275,7 +279,10 @@ internal sealed class TrayApp : ApplicationContext
         _updateTimer.Dispose();
         _tray.Dispose();
         _capturer.Dispose();
+        _settingsWindow?.Close();
+        _menu?.Close();
         base.ExitThreadCore();
+        Microsoft.UI.Xaml.Application.Current.Exit();
     }
 
     private static Icon CreateIcon()

@@ -78,6 +78,16 @@ internal static partial class Native
     public static partial int GetWindowLongW(IntPtr hWnd, int index);
 
     [LibraryImport("user32.dll")]
+    public static partial int SetWindowLongW(IntPtr hWnd, int index, int value);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool SetLayeredWindowAttributes(IntPtr hWnd, uint key, byte alpha, uint flags);
+
+    [LibraryImport("user32.dll")]
+    public static partial uint GetDpiForWindow(IntPtr hWnd);
+
+    [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool GetWindowRect(IntPtr hWnd, out RECT rect);
 
