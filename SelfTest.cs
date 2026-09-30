@@ -314,6 +314,90 @@ internal static class SelfTest
                 return rc;
             }
 
+            if (args.Contains("--ghosttest"))
+            {
+                // Picker over a synthetic bright image (longest rgb() text). Move the cursor along a path, then any
+                // on-screen pixel outside the current panel / hint bar that differs from the frozen image is a ghost.
+                var real = cap.CaptureAll();
+                var frames = real.Monitors.Select(m =>
+                {
+                    int w = m.Bounds.Width, h = m.Bounds.Height;
+                    var px = new byte[w * h * 4];
+                    for (int y = 0; y < h; y++)
+                        for (int x = 0; x < w; x++)
+                        {
+                            int o = (y * w + x) * 4;
+                            px[o] = 255; px[o + 1] = (byte)(200 + (x + y) % 56); px[o + 2] = 255; px[o + 3] = 255;
+                            if ((x / 40 + y / 40) % 2 == 0) { px[o] = 250; px[o + 2] = 245; }
+                        }
+                    return new MonitorFrame { DeviceName = m.DeviceName, Bounds = m.Bounds, GpuName = m.GpuName, Vendor = m.Vendor, Bgra = px };
+                }).ToList();
+                var syn = new CaptureSet { Monitors = frames, Timings = new CaptureTimings() };
+                var vb = syn.VirtualBounds;
+                var frozen = syn.ComposeBgra(vb);
+                using var picker = new UI.ColorPicker(syn);
+                picker.Shown += async (_, _) =>
+                {
+                    // Path across the monitor that holds the hint bar.
+                    var hb = picker.HintBounds;
+                    var mon = frames.Select(f => new Rectangle(f.Bounds.X - vb.X, f.Bounds.Y - vb.Y, f.Bounds.Width, f.Bounds.Height)).First(r => r.IntersectsWith(hb));
+                    for (int i = 0; i <= 60; i++)
+                    {
+                        var p = new Point(mon.X + 200 + i * (mon.Width - 400) / 60, mon.Y + 300 + (int)(200 * Math.Sin(i / 6.0)));
+                        SendMessage(picker.Handle, 0x200, IntPtr.Zero, (IntPtr)((p.Y << 16) | (p.X & 0xFFFF)));
+                        if (i % 3 == 0) { picker.Update(); await Task.Delay(15); }
+                    }
+                    picker.Update();
+                    await Task.Delay(250);
+                    var live = cap.CaptureAll();
+                    var liveFull = live.ComposeBgra(vb);
+                    var panel = Rectangle.Inflate(picker.PanelBounds, 3, 3);
+                    var hint = Rectangle.Inflate(hb, 3, 3);
+                    var rcur = Cursor.Position; // the real mouse pointer can be drawn into the capture; it is not a ghost
+                    var pointer = new Rectangle(rcur.X - vb.X - 20, rcur.Y - vb.Y - 20, 40, 40);
+                    long ghost = 0; var ghostBox = Rectangle.Empty;
+                    for (int y = mon.Top; y < mon.Bottom; y++)
+                        for (int x = mon.Left; x < mon.Right; x++)
+                        {
+                            if (panel.Contains(x, y) || hint.Contains(x, y) || pointer.Contains(x, y)) continue;
+                            int o = (y * vb.Width + x) * 4;
+                            if (liveFull[o] != frozen[o] || liveFull[o + 1] != frozen[o + 1] || liveFull[o + 2] != frozen[o + 2])
+                            {
+                                ghost++;
+                                ghostBox = ghostBox.IsEmpty ? new Rectangle(x, y, 1, 1) : Rectangle.Union(ghostBox, new Rectangle(x, y, 1, 1));
+                            }
+                        }
+                    W($"ghosttest: stray pixels outside the panel and hint bar: {ghost:N0}{(ghost > 0 ? $" within {ghostBox}" : "")}");
+                    var rc0 = Cursor.Position;
+                    W($"   real cursor at capture time: overlay client ({rc0.X - vb.X},{rc0.Y - vb.Y})");
+                    if (ghost > 0)
+                    {
+                        var gb = Rectangle.Intersect(Rectangle.Inflate(ghostBox, 8, 8), mon);
+                        var gbytes = new byte[gb.Width * gb.Height * 4];
+                        for (int y = 0; y < gb.Height; y++) Array.Copy(liveFull, ((gb.Y + y) * vb.Width + gb.X) * 4, gbytes, y * gb.Width * 4, gb.Width * 4);
+                        using var gbmp = ImageOutput.ToBitmap(gbytes, gb.Width, gb.Height);
+                        using var big = new Bitmap(gb.Width * 6, gb.Height * 6);
+                        using (var gg = Graphics.FromImage(big)) { gg.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.NearestNeighbor; gg.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.Half; gg.DrawImage(gbmp, 0, 0, big.Width, big.Height); }
+                        big.Save(Path.Combine(dir, "ghost_stray.png"), ImageFormat.Png);
+                    }
+                    // Snapshot of the final panel + some surroundings for a visual check.
+                    var snap = Rectangle.Intersect(Rectangle.Inflate(panel, 80, 30), mon);
+                    var bytes = new byte[snap.Width * snap.Height * 4];
+                    for (int y = 0; y < snap.Height; y++) Array.Copy(liveFull, ((snap.Y + y) * vb.Width + snap.X) * 4, bytes, y * snap.Width * 4, snap.Width * 4);
+                    using (var bmp = ImageOutput.ToBitmap(bytes, snap.Width, snap.Height)) bmp.Save(Path.Combine(dir, "ghost_panel.png"), ImageFormat.Png);
+                    var hs = Rectangle.Intersect(hint, mon);
+                    var hbytes = new byte[hs.Width * hs.Height * 4];
+                    for (int y = 0; y < hs.Height; y++) Array.Copy(liveFull, ((hs.Y + y) * vb.Width + hs.X) * 4, hbytes, y * hs.Width * 4, hs.Width * 4);
+                    using (var bmp = ImageOutput.ToBitmap(hbytes, hs.Width, hs.Height)) bmp.Save(Path.Combine(dir, "ghost_hint.png"), ImageFormat.Png);
+                    rc = ghost == 0 ? 0 : 14;
+                    picker.Close();
+                };
+                picker.ShowDialog();
+                W(rc == 0 ? "ghosttest PASSED" : "ghosttest FAILED");
+                File.WriteAllText(Path.Combine(dir, "selftest.log"), log.ToString());
+                return rc;
+            }
+
             if (args.Contains("--pickertest"))
             {
                 // Open the tray colour picker, click known pixels with window messages, compare with the capture.
