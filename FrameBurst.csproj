@@ -17,6 +17,8 @@
     <NoWarn>$(NoWarn);WFAC010</NoWarn>
     <Product>FrameBurst</Product>
     <Description>GPU-accelerated screenshot tool</Description>
+    <Copyright>Copyright (C) 2026 Luno. Licensed under the GNU GPL v3.0.</Copyright>
+    <PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>
   </PropertyGroup>
 
   <ItemGroup>

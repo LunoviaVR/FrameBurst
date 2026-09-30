@@ -193,3 +193,10 @@ copies then pick up through the updater:
 git tag v1.1.0
 git push origin v1.1.0
 ```
+
+## License
+
+FrameBurst is free software: you can redistribute it and/or modify it under the terms of the
+[GNU General Public License v3.0](LICENSE) as published by the Free Software Foundation, either version 3 of
+the License, or (at your option) any later version. It is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; see the license for details.
