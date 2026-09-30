@@ -1,0 +1,80 @@
+# ---------------------------------------------------------------------------
+# .NET build output
+# ---------------------------------------------------------------------------
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+[Ll]og/
+[Ll]ogs/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]64/
+publish/
+artifacts/
+*.dll.config
+
+# NuGet
+*.nupkg
+*.snupkg
+**/packages/*
+!**/packages/build/
+project.lock.json
+project.fragment.lock.json
+*.nuget.props
+*.nuget.targets
+
+# ---------------------------------------------------------------------------
+# Visual Studio / Rider / VS Code
+# ---------------------------------------------------------------------------
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.userprefs
+.idea/
+*.sln.iml
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+
+# Test results and coverage
+[Tt]est[Rr]esult*/
+*.trx
+*.coverage
+*.coveragexml
+coverage*.json
+coverage*.xml
+
+# Profiler / diagnostics
+*.diagsession
+*.vspx
+*.psess
+*.vsp
+*.etl
+*.dmp
+
+# ---------------------------------------------------------------------------
+# GpuShot output from self-tests or local runs
+# ---------------------------------------------------------------------------
+selftest.log
+gpushot.log
+*.gss
+
+# ---------------------------------------------------------------------------
+# OS clutter
+# ---------------------------------------------------------------------------
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+*.lnk
+*.tmp
+*.bak
+*~
