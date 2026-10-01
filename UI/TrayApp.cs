@@ -181,7 +181,7 @@ internal sealed class TrayApp : ApplicationContext
             catch (Exception ex)
             {
                 Log.Write("update check failed: " + ex.Message);
-                if (manual) MessageBox.Show("Could not check for updates:\n" + ex.Message, "FrameBurst", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                if (manual) _ = MessageDialog.Show("Couldn't check for updates", ex.Message, DialogKind.Warning);
                 return;
             }
             _settings.LastUpdateCheckUtc = DateTime.UtcNow;
@@ -189,7 +189,7 @@ internal sealed class TrayApp : ApplicationContext
 
             if (update == null)
             {
-                if (manual) MessageBox.Show($"FrameBurst {Updater.Current} is the latest version.", "FrameBurst", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                if (manual) _ = MessageDialog.Show("You're up to date", $"FrameBurst {Updater.Current} is the latest version.");
                 return;
             }
             if (manual) { found = update; return; }
@@ -203,19 +203,24 @@ internal sealed class TrayApp : ApplicationContext
     private async void PromptUpdate(UpdateInfo update)
     {
         if (_updating) return;
+        _updating = true; // also keeps a second prompt from opening while this one is shown
         string notes = update.Notes.Length > 1200 ? update.Notes[..1200] + "…" : update.Notes;
+        string heading = $"FrameBurst {update.Version} is available";
         if (!Updater.IsInstalled || update.InstallerUrl == null)
         {
             // A copy run from a build folder isn't managed by the installer, so just show the release.
-            if (MessageBox.Show($"FrameBurst {update.Version} is available (you have {Updater.Current}).\n\n{notes}\n\nOpen the download page?",
-                    "FrameBurst update", MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
-                Process.Start(new ProcessStartInfo(update.PageUrl) { UseShellExecute = true });
+            bool open = await MessageDialog.Ask(heading, $"You have {Updater.Current}.\n\n{notes}", "Open download page", title: "FrameBurst update");
+            _updating = false;
+            if (open) Process.Start(new ProcessStartInfo(update.PageUrl) { UseShellExecute = true });
             return;
         }
-        if (MessageBox.Show($"FrameBurst {update.Version} is available (you have {Updater.Current}).\n\n{notes}\n\nDownload and install it now? FrameBurst will restart.",
-                "FrameBurst update", MessageBoxButtons.YesNo, MessageBoxIcon.Information) != DialogResult.Yes) return;
+        if (!await MessageDialog.Ask(heading, $"You have {Updater.Current}.\n\n{notes}\n\nFrameBurst will restart to finish installing.",
+                "Install now", title: "FrameBurst update"))
+        {
+            _updating = false;
+            return;
+        }
 
-        _updating = true;
         _tray.ShowBalloonTip(3000, "Downloading update…", $"FrameBurst {update.Version}", ToolTipIcon.None);
         try
         {
@@ -225,7 +230,7 @@ internal sealed class TrayApp : ApplicationContext
         catch (Exception ex)
         {
             Log.Write("update failed: " + ex);
-            MessageBox.Show("The update failed:\n" + ex.Message, "FrameBurst", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            _ = MessageDialog.Show("The update failed", ex.Message, DialogKind.Warning);
         }
         finally { _updating = false; }
     }
