@@ -32,7 +32,10 @@ public sealed partial class SettingsWindow : Microsoft.UI.Xaml.Window
         AppWindow.SetIcon(iconPath);
         var icon = new BitmapImage(new Uri(iconPath));
         TitleIcon.Source = icon;
-        AboutIcon.Source = icon;
+        // Full-resolution artwork: an .ico decodes to its first (16 px) frame, and the logo is vector.
+        string assets = Path.Combine(AppContext.BaseDirectory, "Assets");
+        AboutIcon.Source = new BitmapImage(new Uri(Path.Combine(assets, "icon-256.png")));
+        CashAppLogo.Source = new SvgImageSource(new Uri(Path.Combine(assets, "cashapp.svg")));
 
         if (AppWindow.Presenter is OverlappedPresenter p) { p.IsMinimizable = false; p.IsMaximizable = false; }
         double scale = Native.GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(this)) / 96.0;

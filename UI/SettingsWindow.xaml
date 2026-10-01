@@ -298,11 +298,7 @@
                                 <Button Grid.Column="2" Click="Tip_Click" VerticalAlignment="Center" Padding="10,6,14,6"
                                         ToolTipService.ToolTip="cash.app/$LunoviaVR">
                                     <StackPanel Orientation="Horizontal" Spacing="10">
-                                        <!-- Cash App logo: white dollar sign on the brand-green rounded square -->
-                                        <Border Width="22" Height="22" CornerRadius="6" Background="#00D64F">
-                                            <TextBlock Text="$" Foreground="White" FontWeight="Bold" FontSize="15"
-                                                       HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,-2,0,0" />
-                                        </Border>
+                                        <Image x:Name="CashAppLogo" Width="22" Height="22" />
                                         <TextBlock Text="Tip" VerticalAlignment="Center" />
                                     </StackPanel>
                                 </Button>

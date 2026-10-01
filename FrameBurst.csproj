@@ -23,7 +23,7 @@
     <ApplicationIcon>Assets\FrameBurst.ico</ApplicationIcon>
     <AssemblyName>FrameBurst</AssemblyName>
     <RootNamespace>FrameBurst</RootNamespace>
-    <Version>1.2.0</Version>
+    <Version>1.2.1</Version>
     <NoWarn>$(NoWarn);WFAC010</NoWarn>
     <Product>FrameBurst</Product>
     <Description>GPU-accelerated screenshot tool</Description>
@@ -41,6 +41,8 @@
     <EmbeddedResource Include="Gpu\Shaders.hlsl" LogicalName="FrameBurst.Shaders.hlsl" />
     <EmbeddedResource Include="Assets\FrameBurst.ico" LogicalName="FrameBurst.FrameBurst.ico" />
     <Content Include="Assets\FrameBurst.ico" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\icon-256.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\cashapp.svg" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
