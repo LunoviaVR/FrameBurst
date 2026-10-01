@@ -33,8 +33,10 @@ public static class ImageOutput
         var result = new SavedCapture { Area = area, Bgra = bgra };
         if (s.SaveToFile)
         {
-            Directory.CreateDirectory(s.OutputFolder);
-            string baseName = Path.Combine(s.OutputFolder, FormatName(s.FileNamePattern));
+            var now = DateTime.Now;
+            string folder = OutputFolderFor(s, now);
+            Directory.CreateDirectory(folder);
+            string baseName = Path.Combine(folder, FormatName(s.FileNamePattern, now));
             string file = Unique(baseName, ".png");
             var level = s.PngCompression switch
             {
@@ -126,9 +128,46 @@ public static class ImageOutput
         return (copy, hot, new Point(ci.ptScreenPos.X, ci.ptScreenPos.Y));
     }
 
-    private static string FormatName(string pattern)
+    /// <summary>The folder a capture taken at <paramref name="when"/> is saved to, including the dated subfolder if enabled.</summary>
+    public static string OutputFolderFor(Settings s, DateTime when)
     {
-        var now = DateTime.Now;
+        if (!s.UseDateSubfolder || string.IsNullOrWhiteSpace(s.DateSubfolderPattern)) return s.OutputFolder;
+        // Each '' or '/' outside braces starts a new folder level; each level is formatted and sanitised on its own.
+        var parts = new List<string>();
+        foreach (var segment in SplitOutsideBraces(s.DateSubfolderPattern))
+        {
+            var name = FormatSegment(segment, when).Trim().TrimEnd('.');
+            foreach (var c in Path.GetInvalidFileNameChars()) name = name.Replace(c, '_');
+            if (name.Length > 0 && name != "." && name != "..") parts.Add(name);
+        }
+        return parts.Count == 0 ? s.OutputFolder : Path.Combine(s.OutputFolder, Path.Combine(parts.ToArray()));
+    }
+
+    private static IEnumerable<string> SplitOutsideBraces(string pattern)
+    {
+        int depth = 0, start = 0;
+        for (int i = 0; i < pattern.Length; i++)
+        {
+            if (pattern[i] == '{') depth++;
+            else if (pattern[i] == '}' && depth > 0) depth--;
+            else if (depth == 0 && (pattern[i] == '\\' || pattern[i] == '/'))
+            {
+                yield return pattern.Substring(start, i - start);
+                start = i + 1;
+            }
+        }
+        yield return pattern.Substring(start);
+    }
+
+    private static string FormatName(string pattern, DateTime now)
+    {
+        var name = FormatSegment(pattern, now);
+        foreach (var c in Path.GetInvalidFileNameChars()) name = name.Replace(c, '_');
+        return string.IsNullOrWhiteSpace(name) ? "FrameBurst" : name;
+    }
+
+    private static string FormatSegment(string pattern, DateTime now)
+    {
         // Replace {format} tokens with DateTime formatting; everything else is literal.
         var sb = new System.Text.StringBuilder();
         for (int i = 0; i < pattern.Length; i++)
@@ -145,9 +184,7 @@ public static class ImageOutput
             }
             sb.Append(pattern[i]);
         }
-        var name = sb.ToString();
-        foreach (var c in Path.GetInvalidFileNameChars()) name = name.Replace(c, '_');
-        return string.IsNullOrWhiteSpace(name) ? "FrameBurst" : name;
+        return sb.ToString();
     }
 
     private static string Unique(string basePath, string ext)

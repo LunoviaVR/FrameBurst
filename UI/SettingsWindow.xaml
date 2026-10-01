@@ -154,6 +154,19 @@
                         </Border>
                         <Border Style="{StaticResource Card}">
                             <Grid ColumnSpacing="16" RowSpacing="10">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                                <FontIcon Glyph="&#xE787;" FontSize="20" />
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="Dated subfolders" />
+                                    <TextBlock Text="Sort captures by the date they were taken. Use \ between levels, e.g. {yyyy}\{MM}\{dd} or {yyyy}\{MM MMMM}" Style="{StaticResource CardDescription}" TextWrapping="Wrap" />
+                                </StackPanel>
+                                <ToggleSwitch x:Name="DateFolderToggle" Grid.Column="2" MinWidth="0" VerticalAlignment="Center" />
+                                <TextBox x:Name="DateFolderPattern" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" />
+                            </Grid>
+                        </Border>
+                        <Border Style="{StaticResource Card}">
+                            <Grid ColumnSpacing="16" RowSpacing="10">
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                                 <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
                                 <FontIcon Glyph="&#xE8AC;" FontSize="20" />

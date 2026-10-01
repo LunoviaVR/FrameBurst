@@ -34,6 +34,8 @@ public sealed class Settings
     // Output
     public string OutputFolder { get; set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "FrameBurst");
     public string FileNamePattern { get; set; } = "FrameBurst_{yyyy-MM-dd_HH-mm-ss-fff}";
+    public bool UseDateSubfolder { get; set; } = false;
+    public string DateSubfolderPattern { get; set; } = @"{yyyy}\{MM}\{dd}";
     public bool SaveToFile { get; set; } = true;
     public bool CopyToClipboard { get; set; } = true;
     public bool ShowNotification { get; set; } = true;
