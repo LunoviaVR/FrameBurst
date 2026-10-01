@@ -305,7 +305,8 @@ internal static class SelfTest
                     W($"   {o.DeviceName} {o.Bounds} bpc={o.BitsPerColor}");
             }
 
-            using var cap = new DesktopCapturer();
+            using var cap = new DesktopCapturer { ForceGdi = args.Contains("--gdi") };
+            if (cap.ForceGdi) W("capture backend forced to GDI BitBlt");
 
             if (args.Contains("--pixeltest"))
             {
@@ -558,7 +559,7 @@ internal static class SelfTest
                 var s = new Settings { OutputFolder = dir, FileNamePattern = "selftest_" + run };
                 var set = cap.CaptureAll();
                 set = cap.CaptureAll(); // second capture = warm timings
-                W($"Capture run {run}: {set.Monitors.Count} monitor(s), virtual {set.VirtualBounds}, {set.Timings}");
+                W($"Capture run {run} [{set.Backend}]: {set.Monitors.Count} monitor(s), virtual {set.VirtualBounds}, {set.Timings}");
                 foreach (var m in set.Monitors)
                 {
                     long nonBlack = 0;

@@ -20,12 +20,16 @@ public sealed class MonitorFrame
     public ushort[]? Hdr { get; init; }
 }
 
+/// <summary>Which path produced a capture: the GPU (Windows Graphics Capture + D3D11) or the GDI BitBlt fallback.</summary>
+public enum CaptureBackend { Gpu, Gdi }
+
 public sealed class CaptureTimings
 {
     public double AcquireMs, GpuMs, ReadbackMs, TotalMs;
     public double GpuShaderMs = double.NaN; // measured with D3D11 timestamp queries
-    public override string ToString() =>
-        $"acquire {AcquireMs:0.0} ms · GPU {(double.IsNaN(GpuShaderMs) ? "" : $"shader {GpuShaderMs:0.00} ms, ")}pass {GpuMs:0.0} ms · readback {ReadbackMs:0.0} ms · total {TotalMs:0.0} ms";
+    public override string ToString() => GpuMs == 0 && double.IsNaN(GpuShaderMs)
+        ? $"acquire {AcquireMs:0.0} ms · copy {ReadbackMs:0.0} ms · total {TotalMs:0.0} ms"
+        : $"acquire {AcquireMs:0.0} ms · GPU {(double.IsNaN(GpuShaderMs) ? "" : $"shader {GpuShaderMs:0.00} ms, ")}pass {GpuMs:0.0} ms · readback {ReadbackMs:0.0} ms · total {TotalMs:0.0} ms";
 }
 
 /// <summary>A frozen snapshot of every monitor, taken at the moment the hotkey was pressed.</summary>
@@ -33,6 +37,7 @@ public sealed class CaptureSet
 {
     public required List<MonitorFrame> Monitors { get; init; }
     public required CaptureTimings Timings { get; init; }
+    public CaptureBackend Backend { get; init; } = CaptureBackend.Gpu;
     public (IntPtr Handle, Point Hotspot, Point Position)? Cursor { get; set; }
 
     public Rectangle VirtualBounds

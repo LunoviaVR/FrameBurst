@@ -109,10 +109,11 @@ internal sealed class TrayApp : ApplicationContext
             {
                 var r = saved.Area;
                 string where = saved.FilePath != null ? Path.GetFileName(saved.FilePath) : "Copied to clipboard";
-                var gpus = string.Join(", ", set.Monitors.Where(m => m.Bounds.IntersectsWith(r)).Select(m => GpuVendors.Label(m.Vendor)).Distinct());
+                bool gdi = set.Backend == CaptureBackend.Gdi;
+                var gpus = gdi ? "GDI" : string.Join(", ", set.Monitors.Where(m => m.Bounds.IntersectsWith(r)).Select(m => GpuVendors.Label(m.Vendor)).Distinct()) + " GPU";
                 _balloonAction = OpenLast;
-                _tray.ShowBalloonTip(3000, $"Captured {r.Width} × {r.Height}  ·  {gpus} GPU",
-                    $"{where}\nGPU capture {set.Timings.TotalMs:0} ms · encode {saved.EncodeMs:0} ms", ToolTipIcon.None);
+                _tray.ShowBalloonTip(3000, $"Captured {r.Width} × {r.Height}  ·  {gpus}",
+                    $"{where}\n{(gdi ? "GDI" : "GPU")} capture {set.Timings.TotalMs:0} ms · encode {saved.EncodeMs:0} ms", ToolTipIcon.None);
             }
             if (set.Cursor is { } c) Native.DestroyIcon(c.Handle);
         }

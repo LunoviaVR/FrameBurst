@@ -23,7 +23,7 @@
     <ApplicationIcon>Assets\FrameBurst.ico</ApplicationIcon>
     <AssemblyName>FrameBurst</AssemblyName>
     <RootNamespace>FrameBurst</RootNamespace>
-    <Version>1.2.1</Version>
+    <Version>1.3.0</Version>
     <NoWarn>$(NoWarn);WFAC010</NoWarn>
     <Product>FrameBurst</Product>
     <Description>GPU-accelerated screenshot tool</Description>

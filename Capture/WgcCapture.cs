@@ -44,7 +44,14 @@ internal static class WgcCapture
         return true;
     });
 
-    public static bool IsSupported => GraphicsCaptureSession.IsSupported();
+    public static bool IsSupported
+    {
+        get
+        {
+            try { return GraphicsCaptureSession.IsSupported(); }
+            catch { return false; } // Windows builds older than 1803 don't have the API at all
+        }
+    }
 
     public static void WarmUp() => _ = CanHideBorder.Value;
 

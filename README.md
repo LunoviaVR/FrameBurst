@@ -27,7 +27,8 @@ possible, with every step done on the GPU through Direct3D 11 (NVIDIA, AMD and I
 FrameBurst runs in the system tray (the notification area next to the clock). To uninstall it, use
 *Settings › Apps › Installed apps › FrameBurst*.
 
-**Requirements:** Windows 10 version 2004 or later, or Windows 11, on a 64-bit PC with a Direct3D 11 GPU.
+**Requirements:** Windows 10 version 2004 or later, or Windows 11, on a 64-bit PC. A Direct3D 11 GPU is
+recommended; without one FrameBurst falls back to slower GDI capture (see [GDI fallback](#gdi-fallback)).
 
 ### Updates
 
@@ -151,6 +152,26 @@ Settings are stored in `%APPDATA%\FrameBurst\settings.json`, and a log is writte
 A typical run on an RX 9060 XT with 3 monitors (9.9 MP) takes about 45 ms from hotkey to pixels in RAM.
 The compute shader itself runs in about 0.5 ms.
 
+### GDI fallback
+
+If the GPU path can't run (no GPU with Direct3D 11 feature level 11.0, the Microsoft Basic Display Adapter, or
+a Windows build without Windows Graphics Capture), FrameBurst switches to GDI `BitBlt` for the rest of the
+session and notes it in the log. A GPU capture that fails for any other reason is also retried once with GDI
+before an error is shown.
+
+The tradeoff is speed and fidelity:
+
+- **Slower.** `BitBlt` copies every monitor through the CPU one after another, so its cost grows with the total
+  desktop size. On large multi-monitor setups, expect noticeably longer capture times than the ~45 ms GPU
+  path, especially on the systems that actually need the fallback, where there is no GPU driver to accelerate
+  the copy.
+- **Monitors aren't frozen at the same instant**, since each one is copied in turn.
+- **8-bit SDR only.** No HDR copy is made, even with *Save HDR* on.
+- Some hardware-accelerated or exclusive full-screen content may come out black.
+
+The capture notification shows *GDI* instead of the GPU vendor when the fallback was used.
+`FrameBurst.exe --selftest <dir> --gdi` forces the fallback so you can compare it against the GPU path.
+
 The hotkeys are registered with Windows and also watched by a low-level keyboard hook. Full-screen games
 often read the keyboard directly with Windows hotkeys disabled; the hook sees the key first, so the capture
 still starts, and the game does not receive the key press.
@@ -185,6 +206,7 @@ monitor, checks that the PNG encoder round-trips bit-exactly and reports timings
 | `--annotest` | Edits change only the pixels they cover |
 | `--pickertest` | The colour picker reads exact screen colours |
 | `--uitest` | Drives the real overlay: tools, undo/redo and a region selection |
+| `--gdi` | Runs the checks through the GDI `BitBlt` fallback instead of the GPU |
 
 ### Installer
 

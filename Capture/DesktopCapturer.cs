@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Drawing;
+using System.Runtime.InteropServices;
 using SharpGen.Runtime;
 using Vortice.Direct3D11;
 using Vortice.DXGI;
@@ -13,6 +14,7 @@ public sealed record AdapterInfo(string Name, GpuVendor Vendor, ulong VramBytes,
 /// <summary>
 /// Captures every monitor with Windows Graphics Capture (a GPU surface straight from the DWM compositor),
 /// converts it to 8-bit sRGB on the GPU with a compute shader and reads back only the final pixels.
+/// Falls back to GDI BitBlt (<see cref="GdiCapture"/>) when the GPU can't run that path.
 /// </summary>
 public sealed class DesktopCapturer : IDisposable
 {
@@ -61,19 +63,33 @@ public sealed class DesktopCapturer : IDisposable
 
     private static Rectangle ToRect(Vortice.RawRect r) => Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom);
 
+    private bool _gpuUnsupported;
+
+    /// <summary>Skip the GPU path and always capture with GDI BitBlt (self-test / diagnostics).</summary>
+    public bool ForceGdi { get; set; }
+
+    /// <summary>True once the GPU path has been found unusable on this system; captures then go through GDI.</summary>
+    public bool UsingGdiFallback => ForceGdi || _gpuUnsupported;
+
     /// <summary>Compile shaders and create a device per GPU ahead of the first hotkey press.</summary>
     public void WarmUp()
     {
-        GpuDevice.WarmUp();
-        WgcCapture.WarmUp();
         lock (_lock)
         {
-            using var factory = DXGI.CreateDXGIFactory1<IDXGIFactory1>();
-            for (uint ai = 0; factory.EnumAdapters1(ai, out var adapter).Success; ai++)
-                using (adapter)
-                {
-                    if (adapter.EnumOutputs(0, out var o).Success) { o.Dispose(); _ = GetDevice(adapter).WinRtDevice; }
-                }
+            if (UsingGdiFallback) return;
+            try
+            {
+                if (!WgcCapture.IsSupported) throw new GpuUnsupportedException("Windows Graphics Capture is not available on this system.");
+                GpuDevice.WarmUp();
+                WgcCapture.WarmUp();
+                using var factory = DXGI.CreateDXGIFactory1<IDXGIFactory1>();
+                for (uint ai = 0; factory.EnumAdapters1(ai, out var adapter).Success; ai++)
+                    using (adapter)
+                    {
+                        if (adapter.EnumOutputs(0, out var o).Success) { o.Dispose(); _ = GetDevice(adapter).WinRtDevice; }
+                    }
+            }
+            catch (GpuUnsupportedException ex) { DisableGpu(ex); }
         }
     }
 
@@ -82,15 +98,42 @@ public sealed class DesktopCapturer : IDisposable
     {
         lock (_lock)
         {
-            try { return CaptureCore(hdr); }
-            catch (SharpGenException ex) when (IsDeviceLost(ex))
+            if (UsingGdiFallback) return GdiCapture.CaptureAll();
+            try
             {
-                // Driver update / TDR / GPU switch: rebuild devices once and retry.
-                ResetDevices();
-                return CaptureCore(hdr);
+                try { return CaptureCore(hdr); }
+                catch (SharpGenException ex) when (IsDeviceLost(ex))
+                {
+                    // Driver update / TDR / GPU switch: rebuild devices once and retry.
+                    ResetDevices();
+                    return CaptureCore(hdr);
+                }
+            }
+            catch (GpuUnsupportedException ex)
+            {
+                DisableGpu(ex);
+                return GdiCapture.CaptureAll();
+            }
+            catch (Exception ex)
+            {
+                // Transient GPU failure: try GDI for this capture only, but report the original error if that fails too.
+                Log.Write("GPU capture failed, trying GDI for this capture: " + ex.Message);
+                try { return GdiCapture.CaptureAll(); }
+                catch (Exception gdiEx) { Log.Write("GDI capture failed too: " + gdiEx.Message); }
+                throw;
             }
         }
     }
+
+    private void DisableGpu(Exception ex)
+    {
+        _gpuUnsupported = true;
+        ResetDevices();
+        Log.Write($"GPU capture unavailable, falling back to GDI BitBlt: {ex.Message}" + (ex.InnerException != null ? $" ({ex.InnerException.Message})" : ""));
+    }
+
+    /// <summary>The GPU path cannot run on this system (no D3D11 FL11 device, no compute shaders, no WGC).</summary>
+    private sealed class GpuUnsupportedException(string message, Exception? inner = null) : Exception(message, inner);
 
     private static bool IsDeviceLost(SharpGenException ex) =>
         ex.ResultCode == Vortice.DXGI.ResultCode.DeviceRemoved || ex.ResultCode == Vortice.DXGI.ResultCode.DeviceReset ||
@@ -100,7 +143,14 @@ public sealed class DesktopCapturer : IDisposable
     {
         var key = adapter.Description1.Luid.ToString()!;
         if (!_devices.TryGetValue(key, out var dev))
-            _devices[key] = dev = new GpuDevice(adapter);
+        {
+            try { dev = new GpuDevice(adapter); }
+            catch (Exception ex) when (ex is SharpGenException or COMException or InvalidOperationException)
+            {
+                throw new GpuUnsupportedException($"Cannot create a Direct3D 11 (feature level 11.0) device on {adapter.Description1.Description.Trim()}.", ex);
+            }
+            _devices[key] = dev;
+        }
         return dev;
     }
 
@@ -131,7 +181,7 @@ public sealed class DesktopCapturer : IDisposable
         try
         {
             // ---- 1. Grab every monitor's current frame from the compositor, each on its own GPU -------
-            if (!WgcCapture.IsSupported) throw new PlatformNotSupportedException("Windows Graphics Capture is not available on this system.");
+            if (!WgcCapture.IsSupported) throw new GpuUnsupportedException("Windows Graphics Capture is not available on this system.");
             var targets = new List<(GpuDevice Dev, OutputInfo Info)>();
             var acquire = Stopwatch.StartNew();
             using (var factory = DXGI.CreateDXGIFactory1<IDXGIFactory1>())
