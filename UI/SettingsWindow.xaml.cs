@@ -10,15 +10,20 @@ namespace FrameBurst.UI;
 public sealed partial class SettingsWindow : Microsoft.UI.Xaml.Window
 {
     private readonly Settings _s;
-    private readonly Action _checkForUpdates;
+    private readonly Action _exitForUpdate;
+    private UpdateInfo? _update;
+    private bool _updateBusy;
+
+    private const string TipUrl = "https://cash.app/$LunoviaVR";
 
     /// <summary>Raised with the edited copy when the user presses Save and it was written to disk.</summary>
     public event Action<Settings>? Saved;
 
-    public SettingsWindow(Settings settings, Action checkForUpdates)
+    /// <param name="exitForUpdate">Called once the update installer has started; it should exit FrameBurst.</param>
+    public SettingsWindow(Settings settings, Action exitForUpdate)
     {
         _s = settings.Clone();
-        _checkForUpdates = checkForUpdates;
+        _exitForUpdate = exitForUpdate;
         InitializeComponent();
 
         ExtendsContentIntoTitleBar = true;
@@ -36,8 +41,9 @@ public sealed partial class SettingsWindow : Microsoft.UI.Xaml.Window
         AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(
             area.X + (area.Width - size.Width) / 2, area.Y + (area.Height - size.Height) / 2, size.Width, size.Height));
 
-        VersionText.Text = $"FrameBurst {Updater.Current}";
+        VersionText.Text = $"Version {Updater.Current}" + (Updater.IsInstalled ? "" : " (portable build)");
         ReleaseNotes.NavigateUri = new Uri(Updater.ReleasesPage);
+        SourceLink.NavigateUri = new Uri($"https://github.com/{Updater.Repo}");
         LoadValues();
     }
 
@@ -72,7 +78,7 @@ public sealed partial class SettingsWindow : Microsoft.UI.Xaml.Window
         string tag = (args.SelectedItem as NavigationViewItem)?.Tag as string ?? "Capture";
         CapturePage.Visibility = tag == "Capture" ? Visibility.Visible : Visibility.Collapsed;
         OutputPage.Visibility = tag == "Output" ? Visibility.Visible : Visibility.Collapsed;
-        UpdatesPage.Visibility = tag == "Updates" ? Visibility.Visible : Visibility.Collapsed;
+        AboutPage.Visibility = tag == "About" ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private async void Browse_Click(object sender, RoutedEventArgs e)
@@ -88,7 +94,96 @@ public sealed partial class SettingsWindow : Microsoft.UI.Xaml.Window
         catch (Exception ex) { Error.Text = ex.Message; }
     }
 
-    private void CheckNow_Click(object sender, RoutedEventArgs e) => _checkForUpdates();
+    /// <summary>Opens the About page (used by the tray's "Check for updates" item) and optionally starts a check.</summary>
+    public void ShowAbout(bool checkNow)
+    {
+        Nav.SelectedItem = Nav.MenuItems.OfType<NavigationViewItem>().First(i => (string)i.Tag == "About");
+        if (checkNow) CheckNow_Click(this, new RoutedEventArgs());
+    }
+
+    private void SetUpdateState(string title, string status, int glyph, bool busy)
+    {
+        UpdateTitle.Text = title;
+        UpdateStatus.Text = status;
+        UpdateGlyph.Glyph = char.ConvertFromUtf32(glyph);
+        UpdateRing.IsActive = busy;
+        UpdateRing.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private async void CheckNow_Click(object sender, RoutedEventArgs e)
+    {
+        if (_updateBusy) return;
+        _updateBusy = true;
+        CheckButton.IsEnabled = false;
+        InstallButton.Visibility = Visibility.Collapsed;
+        SetUpdateState("Checking for updates…", "Contacting GitHub", 0xE895, busy: true);
+        try
+        {
+            _update = await Updater.CheckAsync();
+            if (_update == null)
+            {
+                SetUpdateState("You're up to date", $"FrameBurst {Updater.Current} is the latest version", 0xE930, busy: false);
+            }
+            else
+            {
+                bool canInstall = Updater.IsInstalled && _update.InstallerUrl != null;
+                SetUpdateState($"FrameBurst {_update.Version} is available",
+                    canInstall ? "FrameBurst will restart to finish installing" : "This copy wasn't installed with setup, so download it from GitHub",
+                    0xE896, busy: false);
+                InstallButton.Content = canInstall ? "Download and install" : "Open download page";
+                InstallButton.Visibility = Visibility.Visible;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Write("update check failed: " + ex.Message);
+            SetUpdateState("Couldn't check for updates", ex.Message, 0xE7BA, busy: false);
+        }
+        finally
+        {
+            _updateBusy = false;
+            CheckButton.IsEnabled = true;
+        }
+    }
+
+    private async void Install_Click(object sender, RoutedEventArgs e)
+    {
+        if (_update is not { } update || _updateBusy) return;
+        if (!Updater.IsInstalled || update.InstallerUrl == null)
+        {
+            Process.Start(new ProcessStartInfo(update.PageUrl) { UseShellExecute = true });
+            return;
+        }
+
+        _updateBusy = true;
+        CheckButton.IsEnabled = InstallButton.IsEnabled = false;
+        DownloadProgress.Visibility = Visibility.Visible;
+        DownloadProgress.IsIndeterminate = true;
+        SetUpdateState($"Downloading FrameBurst {update.Version}…", "FrameBurst will restart when it's done", 0xE896, busy: false);
+        var progress = new Progress<double>(f =>
+        {
+            DownloadProgress.IsIndeterminate = false;
+            DownloadProgress.Value = f * 100;
+            UpdateStatus.Text = $"{f:P0} downloaded. FrameBurst will restart when it's done";
+        });
+        try
+        {
+            await Updater.InstallAsync(update, progress);
+            SetUpdateState("Installing…", "FrameBurst is restarting", 0xE896, busy: true);
+            _exitForUpdate(); // the installer replaces the files and restarts FrameBurst
+        }
+        catch (Exception ex)
+        {
+            Log.Write("update failed: " + ex);
+            SetUpdateState("The update failed", ex.Message, 0xE7BA, busy: false);
+            DownloadProgress.Visibility = Visibility.Collapsed;
+            _updateBusy = false;
+            CheckButton.IsEnabled = InstallButton.IsEnabled = true;
+        }
+    }
+
+    private void Tip_Click(object sender, RoutedEventArgs e) =>
+        Process.Start(new ProcessStartInfo(TipUrl) { UseShellExecute = true });
 
     private void Save_Click(object sender, RoutedEventArgs e)
     {

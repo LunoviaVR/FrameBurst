@@ -50,8 +50,8 @@
                 <NavigationViewItem Content="Output" Tag="Output">
                     <NavigationViewItem.Icon><FontIcon Glyph="&#xE8B7;" /></NavigationViewItem.Icon>
                 </NavigationViewItem>
-                <NavigationViewItem Content="Updates" Tag="Updates">
-                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE895;" /></NavigationViewItem.Icon>
+                <NavigationViewItem Content="About" Tag="About">
+                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE946;" /></NavigationViewItem.Icon>
                 </NavigationViewItem>
             </NavigationView.MenuItems>
 
@@ -234,30 +234,78 @@
                         </Border>
                     </StackPanel>
 
-                    <!-- Updates -->
-                    <StackPanel x:Name="UpdatesPage" Spacing="4" Visibility="Collapsed">
-                        <TextBlock Text="Updates" Style="{StaticResource TitleTextBlockStyle}" Margin="0,8,0,0" />
-                        <TextBlock Text="Version" Style="{StaticResource SectionHeader}" />
-                        <Border Style="{StaticResource Card}">
-                            <Grid ColumnSpacing="16">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                                <Image x:Name="AboutIcon" Width="32" Height="32" />
-                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                    <TextBlock x:Name="VersionText" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                                    <HyperlinkButton x:Name="ReleaseNotes" Content="Release notes" Padding="0" Margin="0,2,0,0" />
+                    <!-- About -->
+                    <StackPanel x:Name="AboutPage" Spacing="4" Visibility="Collapsed">
+                        <TextBlock Text="About" Style="{StaticResource TitleTextBlockStyle}" Margin="0,8,0,0" />
+                        <Border Style="{StaticResource Card}" Margin="0,24,0,0" Padding="20,16">
+                            <Grid ColumnSpacing="20">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                <Image x:Name="AboutIcon" Width="56" Height="56" VerticalAlignment="Top" />
+                                <StackPanel Grid.Column="1" Spacing="4">
+                                    <TextBlock Text="FrameBurst" Style="{StaticResource SubtitleTextBlockStyle}" />
+                                    <TextBlock x:Name="VersionText" Style="{StaticResource CardDescription}" />
+                                    <TextBlock TextWrapping="Wrap" Margin="0,6,0,0"
+                                               Text="A system tray screenshot tool built for the highest-quality capture possible. Every step runs on the GPU through Direct3D 11, so captures are pixel-exact, fast, and work over full-screen games. Annotate before you pick a region, then save lossless PNGs (with an optional HDR copy) or copy straight to the clipboard." />
+                                    <StackPanel Orientation="Horizontal" Spacing="16" Margin="0,4,0,0">
+                                        <HyperlinkButton x:Name="ReleaseNotes" Content="Release notes" Padding="0" />
+                                        <HyperlinkButton x:Name="SourceLink" Content="Source code" Padding="0" />
+                                        <TextBlock Text="Licensed under the GNU GPL v3.0" Style="{StaticResource CardDescription}" VerticalAlignment="Center" />
+                                    </StackPanel>
                                 </StackPanel>
-                                <Button Grid.Column="2" Content="Check for updates" Click="CheckNow_Click" VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+
+                        <TextBlock Text="Updates" Style="{StaticResource SectionHeader}" />
+                        <Border Style="{StaticResource Card}">
+                            <Grid ColumnSpacing="16" RowSpacing="10">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                                <FontIcon x:Name="UpdateGlyph" Glyph="&#xE895;" FontSize="20" />
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock x:Name="UpdateTitle" Text="Check for updates" />
+                                    <TextBlock x:Name="UpdateStatus" Text="See whether a newer version of FrameBurst is available" Style="{StaticResource CardDescription}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                    <ProgressRing x:Name="UpdateRing" Width="20" Height="20" IsActive="False" Visibility="Collapsed" />
+                                    <Button x:Name="CheckButton" Content="Check for updates" Click="CheckNow_Click" />
+                                    <Button x:Name="InstallButton" Content="Download and install" Style="{StaticResource AccentButtonStyle}"
+                                            Click="Install_Click" Visibility="Collapsed" />
+                                </StackPanel>
+                                <ProgressBar x:Name="DownloadProgress" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Visibility="Collapsed" />
                             </Grid>
                         </Border>
                         <Border Style="{StaticResource Card}">
                             <Grid ColumnSpacing="16">
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                                <FontIcon Glyph="&#xE895;" FontSize="20" />
+                                <FontIcon Glyph="&#xE823;" FontSize="20" />
                                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                     <TextBlock Text="Check for updates automatically" />
                                     <TextBlock Text="FrameBurst checks GitHub once a day and asks before installing anything" Style="{StaticResource CardDescription}" />
                                 </StackPanel>
                                 <ToggleSwitch x:Name="AutoUpdate" Grid.Column="2" MinWidth="0" VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+
+                        <TextBlock Text="Support FrameBurst" Style="{StaticResource SectionHeader}" />
+                        <Border Style="{StaticResource Card}">
+                            <Grid ColumnSpacing="16">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                <FontIcon Glyph="&#xEB51;" FontSize="20" />
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="Leave a tip" />
+                                    <TextBlock Text="FrameBurst is free and open source. If it saves you time, a tip helps keep it going." Style="{StaticResource CardDescription}" />
+                                </StackPanel>
+                                <Button Grid.Column="2" Click="Tip_Click" VerticalAlignment="Center" Padding="10,6,14,6"
+                                        ToolTipService.ToolTip="cash.app/$LunoviaVR">
+                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                        <!-- Cash App logo: white dollar sign on the brand-green rounded square -->
+                                        <Border Width="22" Height="22" CornerRadius="6" Background="#00D64F">
+                                            <TextBlock Text="$" Foreground="White" FontWeight="Bold" FontSize="15"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,-2,0,0" />
+                                        </Border>
+                                        <TextBlock Text="Tip" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
                             </Grid>
                         </Border>
                     </StackPanel>

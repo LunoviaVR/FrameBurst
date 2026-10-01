@@ -148,7 +148,7 @@ internal sealed class TrayApp : ApplicationContext
         flyout.Items.Add(new Microsoft.UI.Xaml.Controls.MenuFlyoutSeparator());
         flyout.Items.Add(TrayMenu.Item("Open screenshot folder", "", OpenFolder));
         flyout.Items.Add(TrayMenu.Item("Settings", "", ShowSettings));
-        flyout.Items.Add(TrayMenu.Item("Check for updates", "", () => CheckForUpdates(manual: true)));
+        flyout.Items.Add(TrayMenu.Item("Check for updates", "", () => { ShowSettings(); _settingsWindow?.ShowAbout(checkNow: true); }));
         flyout.Items.Add(new Microsoft.UI.Xaml.Controls.MenuFlyoutSeparator());
         flyout.Items.Add(TrayMenu.Item("Exit", "", ExitThread));
         (_menu ??= new TrayMenu()).Show(flyout);
@@ -158,7 +158,7 @@ internal sealed class TrayApp : ApplicationContext
     {
         if (_settingsWindow != null) { _settingsWindow.BringToFront(); return; }
         _hotkeys.UnregisterAll(); // so the hotkey boxes can receive the keys
-        _settingsWindow = new SettingsWindow(_settings, () => CheckForUpdates(manual: true));
+        _settingsWindow = new SettingsWindow(_settings, ExitThread);
         _settingsWindow.Saved += s => _settings = s;
         _settingsWindow.Closed += (_, _) =>
         {

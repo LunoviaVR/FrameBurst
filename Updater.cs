@@ -61,7 +61,7 @@ internal static class Updater
     }
 
     /// <summary>Downloads the installer, checks its SHA-256 against GitHub's, and starts it. The caller should exit.</summary>
-    public static async Task InstallAsync(UpdateInfo update)
+    public static async Task InstallAsync(UpdateInfo update, IProgress<double>? progress = null)
     {
         if (update.InstallerUrl == null) throw new InvalidOperationException("This release has no installer attached.");
         var uri = new Uri(update.InstallerUrl);
@@ -72,9 +72,20 @@ internal static class Updater
         using (var http = CreateClient())
         {
             http.Timeout = TimeSpan.FromMinutes(10);
-            await using var src = await http.GetStreamAsync(uri);
+            using var resp = await http.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead);
+            resp.EnsureSuccessStatusCode();
+            long? total = resp.Content.Headers.ContentLength;
+            await using var src = await resp.Content.ReadAsStreamAsync();
             await using var dst = File.Create(path);
-            await src.CopyToAsync(dst);
+            var buffer = new byte[81920];
+            long done = 0;
+            int n;
+            while ((n = await src.ReadAsync(buffer)) > 0)
+            {
+                await dst.WriteAsync(buffer.AsMemory(0, n));
+                done += n;
+                if (total > 0) progress?.Report((double)done / total.Value);
+            }
         }
 
         if (update.Sha256 != null)
