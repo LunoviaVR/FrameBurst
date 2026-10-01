@@ -114,12 +114,24 @@ Open Settings from the tray icon's right-click menu (**Settings…**).
 | Tab | Options |
 |---|---|
 | Capture | Hotkeys for each mode, a capture delay in milliseconds, include the mouse cursor |
-| Output | Save folder, file name pattern, save to file, copy to clipboard, show notification, PNG compression |
-| Updates | Current version, check for updates automatically, link to the release notes |
+| Output | Save folder, dated subfolders, file name pattern, PNG compression, save HDR copy, save to file, copy to clipboard, show notification |
+| About | Current version, check for updates (manually or automatically), release notes and source links, leave a tip |
 
 The file name pattern is plain text with a date in `{braces}` using .NET date format codes, for example
 `FrameBurst_{yyyy-MM-dd_HH-mm-ss-fff}`. The **Read more.** link under it lists every code. PNG compression
 only trades file size for speed; the image is lossless at every setting.
+
+#### Capture
+
+![Capture settings tab](docs/screenshots/settings-capture.png)
+
+#### Output
+
+![Output settings tab](docs/screenshots/settings-output.png)
+
+#### About
+
+![About settings tab](docs/screenshots/settings-about.png)
 
 Settings are stored in `%APPDATA%\FrameBurst\settings.json`, and a log is written to
 `%APPDATA%\FrameBurst\frameburst.log`.
