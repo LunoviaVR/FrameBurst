@@ -245,7 +245,7 @@
                                     <TextBlock Text="FrameBurst" Style="{StaticResource SubtitleTextBlockStyle}" />
                                     <TextBlock x:Name="VersionText" Style="{StaticResource CardDescription}" />
                                     <TextBlock TextWrapping="Wrap" Margin="0,6,0,0"
-                                               Text="A system tray screenshot tool built for the highest-quality capture possible. Every step runs on the GPU through Direct3D 11, so captures are pixel-exact, fast, and work over full-screen games. Annotate before you pick a region, then save lossless PNGs (with an optional HDR copy) or copy straight to the clipboard." />
+                                               Text="A system tray screenshot tool built for the highest-quality capture possible. Capture and colour conversion run on the GPU through Direct3D 11, so captures are pixel-exact, fast, and work over full-screen games. Annotate before you pick a region, then save lossless PNGs (with an optional HDR copy) or copy straight to the clipboard." />
                                     <StackPanel Orientation="Horizontal" Spacing="16" Margin="0,4,0,0">
                                         <HyperlinkButton x:Name="ReleaseNotes" Content="Release notes" Padding="0" />
                                         <HyperlinkButton x:Name="SourceLink" Content="Source code" Padding="0" />

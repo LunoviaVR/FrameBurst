@@ -3,7 +3,8 @@
 # FrameBurst
 
 A system tray screenshot tool for Windows built around one goal: capturing the highest-quality image
-possible, with every step done on the GPU through Direct3D 11 (NVIDIA, AMD and Intel).
+possible. Capture and colour conversion run on the GPU through Direct3D 11 (NVIDIA, AMD and Intel); PNG
+encoding runs on the CPU across all cores.
 
 - **Pixel-exact captures.** Every colour on screen comes out exactly as displayed, verified across all
   16,777,216 colours.
@@ -178,8 +179,9 @@ still starts, and the game does not receive the key press.
 
 ## Limits
 
-- **HDR isn't supported.** On a monitor in Windows HDR mode, captures are clipped to SDR and look washed out
-  or blown out. Turn HDR off for that monitor before capturing it.
+- **The normal capture of an HDR monitor is SDR.** The 8-bit PNG, the clipboard and the editor clip a monitor
+  in Windows HDR mode to SDR, so bright areas can look blown out. Turn on *Save HDR copy* to also get a 16-bit
+  PQ PNG with the full range, or turn HDR off for that monitor before capturing.
 - DRM-protected video shows up black. Windows Graphics Capture enforces this.
 - On Windows 10 a yellow capture border may flash briefly around the screen. Windows 11 hides it.
 - The secure desktop (UAC prompts, the lock screen) cannot be captured.
