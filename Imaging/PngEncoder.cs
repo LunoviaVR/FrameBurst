@@ -8,7 +8,7 @@ namespace FrameBurst.Imaging;
 ///  * per-row adaptive filter selection (None/Sub/Up/Average/Paeth, min-sum-of-abs heuristic), in parallel
 ///  * multi-threaded deflate: the filtered stream is split into chunks that are compressed concurrently and
 ///    stitched into one valid zlib stream with sync-flush boundaries
-///  * 8-bit sRGB, RGB or RGBA
+///  * 8-bit sRGB, RGB or RGBA; 16-bit RGB in BT.2100 PQ for HDR captures
 /// </summary>
 public static class PngEncoder
 {
@@ -36,6 +36,37 @@ public static class PngEncoder
         WriteChunk(output, "sRGB", new byte[] { 0 }); // perceptual intent
         WriteIdat(output, raw, level);
         WriteChunk(output, "IEND", Array.Empty<byte>());
+    }
+
+    /// <summary>
+    /// Writes a 16-bit RGB HDR PNG from tightly packed RGBA16 pixels in BT.2100 PQ, tagged with a cICP chunk
+    /// (BT.2020 primaries, PQ transfer, full range) so HDR-aware viewers show it correctly. Alpha is dropped.
+    /// </summary>
+    public static void WriteRgba16Pq(Stream output, ushort[] rgba, int width, int height, CompressionLevel level)
+    {
+        const int bpp = 6;
+        int stride = width * bpp;
+        var raw = new byte[height * (stride + 1)];
+        Parallel.For(0, height, () => (new byte[stride], new byte[stride]), (y, _, bufs) =>
+        {
+            var (cur, prev) = bufs;
+            ToRgb16(rgba, y, width, cur);
+            if (y > 0) ToRgb16(rgba, y - 1, width, prev); else Array.Clear(prev);
+            FilterRow(cur, prev, bpp, raw.AsSpan(y * (stride + 1), stride + 1));
+            return bufs;
+        }, _ => { });
+
+        WriteHeader(output, width, height, 16, 2);
+        WriteChunk(output, "cICP", new byte[] { 9, 16, 0, 1 });
+        WriteIdat(output, raw, level);
+        WriteChunk(output, "IEND", Array.Empty<byte>());
+    }
+
+    private static void ToRgb16(ushort[] rgba, int y, int width, byte[] dst)
+    {
+        int s = y * width * 4, d = 0;
+        for (int x = 0; x < width; x++, s += 4)
+            for (int c = 0; c < 3; c++) { ushort v = rgba[s + c]; dst[d++] = (byte)(v >> 8); dst[d++] = (byte)v; }
     }
 
     private static bool IsOpaque(byte[] bgra)

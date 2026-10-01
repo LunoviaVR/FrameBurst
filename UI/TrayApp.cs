@@ -86,7 +86,7 @@ internal sealed class TrayApp : ApplicationContext
             Native.GetCursorPos(out var cursorPos);
 
             var settings = _settings;
-            var set = await Task.Run(() => _capturer.CaptureAll());
+            var set = await Task.Run(() => _capturer.CaptureAll(settings.SaveHdr && settings.SaveToFile));
             set.Cursor = cursor;
 
             byte[]? annotated = null;

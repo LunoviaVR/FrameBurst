@@ -41,6 +41,7 @@ public sealed class Settings
     public bool ShowNotification { get; set; } = true;
     public bool CaptureCursor { get; set; } = false;
     public PngCompression PngCompression { get; set; } = PngCompression.Balanced;
+    public bool SaveHdr { get; set; } = false;
 
     // Behaviour
     public int CaptureDelayMs { get; set; } = 0;

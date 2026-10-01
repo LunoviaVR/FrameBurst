@@ -45,7 +45,8 @@ internal struct ShaderParams
 /// </summary>
 internal sealed class GpuDevice : IDisposable
 {
-    private static readonly Lazy<byte[]> Bytecode = new(CompileShaders);
+    private static readonly Lazy<byte[]> Bytecode = new(() => CompileShader("Convert"));
+    private static readonly Lazy<byte[]> HdrBytecode = new(() => CompileShader("ConvertHdr"));
 
     public ID3D11Device Device { get; }
     public ID3D11DeviceContext Context { get; }
@@ -54,6 +55,10 @@ internal sealed class GpuDevice : IDisposable
     public FeatureLevel FeatureLevel { get; }
     public ID3D11ComputeShader ConvertShader { get; }
     public ID3D11Buffer ConstantBuffer { get; }
+
+    private ID3D11ComputeShader? _hdrShader;
+    /// <summary>scRGB to 16-bit PQ shader, created the first time an HDR copy is asked for.</summary>
+    public ID3D11ComputeShader HdrShader => _hdrShader ??= Device.CreateComputeShader(HdrBytecode.Value);
 
     private Windows.Graphics.DirectX.Direct3D11.IDirect3DDevice? _winRtDevice;
     /// <summary>The same device wrapped for Windows Graphics Capture frame pools.</summary>
@@ -80,23 +85,27 @@ internal sealed class GpuDevice : IDisposable
         ConstantBuffer = Device.CreateBuffer((uint)Marshal.SizeOf<ShaderParams>(), BindFlags.ConstantBuffer, ResourceUsage.Default, CpuAccessFlags.None, ResourceOptionFlags.None, 0);
     }
 
-    private static byte[] CompileShaders()
+    private static byte[] CompileShader(string entry)
     {
         using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("FrameBurst.Shaders.hlsl")
             ?? throw new InvalidOperationException("Embedded shader source missing.");
         string src = new StreamReader(stream).ReadToEnd();
         const ShaderFlags flags = ShaderFlags.OptimizationLevel3 | ShaderFlags.EnableStrictness;
-        return Compiler.Compile(src, "Convert", "Shaders.hlsl", "cs_5_0", flags, EffectFlags.None).ToArray();
+        return Compiler.Compile(src, entry, "Shaders.hlsl", "cs_5_0", flags, EffectFlags.None).ToArray();
     }
 
     /// <summary>Forces shader compilation up front so the first capture isn't slowed down.</summary>
     public static void WarmUp() => _ = Bytecode.Value;
+
+    /// <summary>Compiles the HDR shader (used by the self-test).</summary>
+    public static void WarmUpHdr() => _ = HdrBytecode.Value;
 
     public void Dispose()
     {
         _winRtDevice?.Dispose();
         ConstantBuffer.Dispose();
         ConvertShader.Dispose();
+        _hdrShader?.Dispose();
         Context.ClearState();
         Context.Dispose();
         Device.Dispose();

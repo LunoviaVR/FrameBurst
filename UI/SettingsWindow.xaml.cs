@@ -50,6 +50,7 @@ public sealed partial class SettingsWindow : Microsoft.UI.Xaml.Window
         DateFolderToggle.IsOn = _s.UseDateSubfolder; DateFolderPattern.Text = _s.DateSubfolderPattern;
         SaveToggle.IsOn = _s.SaveToFile; ClipToggle.IsOn = _s.CopyToClipboard; NotifyToggle.IsOn = _s.ShowNotification;
         Png.SelectedIndex = (int)_s.PngCompression;
+        HdrToggle.IsOn = _s.SaveHdr;
         AutoUpdate.IsOn = _s.CheckForUpdates;
     }
 
@@ -62,6 +63,7 @@ public sealed partial class SettingsWindow : Microsoft.UI.Xaml.Window
         _s.UseDateSubfolder = DateFolderToggle.IsOn; _s.DateSubfolderPattern = DateFolderPattern.Text.Trim();
         _s.SaveToFile = SaveToggle.IsOn; _s.CopyToClipboard = ClipToggle.IsOn; _s.ShowNotification = NotifyToggle.IsOn;
         _s.PngCompression = (PngCompression)Math.Max(0, Png.SelectedIndex);
+        _s.SaveHdr = HdrToggle.IsOn;
         _s.CheckForUpdates = AutoUpdate.IsOn;
     }
 

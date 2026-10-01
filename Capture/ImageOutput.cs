@@ -13,6 +13,7 @@ public sealed class SavedCapture
     public required Rectangle Area { get; init; }
     public required byte[] Bgra { get; init; }
     public string? FilePath { get; set; }
+    public string? HdrFilePath { get; set; }
     public double EncodeMs { get; set; }
 }
 
@@ -48,6 +49,15 @@ public static class ImageOutput
             using (var fs = new FileStream(file, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1 << 20))
                 PngEncoder.WriteBgra8(fs, bgra, area.Width, area.Height, level);
             result.FilePath = file;
+
+            // HDR copy: the unedited capture saved beside the SDR file, only when an HDR monitor is in the area.
+            if (s.SaveHdr && set.HasHdr(area))
+            {
+                string hdrFile = Unique(Path.Combine(folder, Path.GetFileNameWithoutExtension(file) + "_HDR"), ".png");
+                using var hfs = new FileStream(hdrFile, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1 << 20);
+                PngEncoder.WriteRgba16Pq(hfs, set.ComposeHdr(area), area.Width, area.Height, level);
+                result.HdrFilePath = hdrFile;
+            }
         }
         result.EncodeMs = sw.Elapsed.TotalMilliseconds;
         return result;

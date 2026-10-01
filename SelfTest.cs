@@ -501,6 +501,19 @@ internal static class SelfTest
                 return 0;
             }
 
+            if (args.Contains("--hdr"))
+            {
+                // Capture with the HDR copy on; saves an _HDR.png only if an HDR monitor is present.
+                var hs = new Settings { OutputFolder = dir, FileNamePattern = "hdr", SaveHdr = true };
+                GpuDevice.WarmUpHdr(); W("hdr shader compiled");
+                var set = cap.CaptureAll(hdr: true);
+                foreach (var m in set.Monitors) W($"  {m.DeviceName}: hdr={m.IsHdr} hdrCopy={(m.Hdr != null)}");
+                var saved = ImageOutput.Produce(set, set.VirtualBounds, hs);
+                W($"hdr: sdr={saved.FilePath} hdr={saved.HdrFilePath ?? "(no HDR monitor)"} encode {saved.EncodeMs:0} ms");
+                File.WriteAllText(Path.Combine(dir, "selftest.log"), log.ToString());
+                return 0;
+            }
+
             if (args.Contains("--overlay"))
             {
                 // Show the region overlay for ~1 s, grab the screen while it is up, then close it.

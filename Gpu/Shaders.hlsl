@@ -15,6 +15,22 @@ cbuffer Params : register(b0)
 
 Texture2D<float4>         Src    : register(t0);
 RWTexture2D<unorm float4> Output : register(u0);
+RWTexture2D<unorm float4> HdrOutput : register(u1);
+
+// scRGB (linear BT.709, 1.0 = 80 nits) -> BT.2100 PQ (BT.2020 primaries), as stored in an HDR PNG.
+float3 ScRgbToPq(float3 c)
+{
+    static const float3x3 Bt709To2020 =
+    {
+        0.627404, 0.329283, 0.043313,
+        0.069097, 0.919540, 0.011362,
+        0.016391, 0.088013, 0.895595,
+    };
+    float3 y = saturate(mul(Bt709To2020, c) * (80.0 / 10000.0));
+    const float m1 = 0.1593017578125, m2 = 78.84375, c1 = 0.8359375, c2 = 18.8515625, c3 = 18.6875;
+    float3 p = pow(y, m1);
+    return pow((c1 + c2 * p) / (1.0 + c3 * p), m2);
+}
 
 float3 LinearToSrgb(float3 c)
 {
@@ -41,4 +57,13 @@ void Convert(uint3 id : SV_DispatchThreadID)
     float4 s = Src[SourceCoord(id.xy)];
     float3 c = SrcIsFloat ? LinearToSrgb(s.rgb) : s.rgb;
     Output[id.xy] = float4(c.b, c.g, c.r, 1.0); // BGRA byte order
+}
+
+// Optional second pass for HDR captures: 16-bit RGBA in PQ. The source is always the FP16 scRGB WGC frame.
+[numthreads(16, 16, 1)]
+void ConvertHdr(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= OutW || id.y >= OutH) return;
+    float4 s = Src[SourceCoord(id.xy)];
+    HdrOutput[id.xy] = float4(ScRgbToPq(max(s.rgb, 0.0)), 1.0);
 }

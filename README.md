@@ -12,6 +12,7 @@ possible, with every step done on the GPU through Direct3D 11 (NVIDIA, AMD and I
 - **Built-in editor.** Pen, highlighter, arrows, boxes, text and blur, applied before you pick the region.
 - **Screen colour picker** with a magnifier.
 - **Lossless PNG** saved to disk and copied to the clipboard.
+- **Optional HDR copy** (16-bit PQ PNG) when an HDR monitor is captured; off by default.
 - **Automatic updates** from GitHub releases.
 
 ## Install

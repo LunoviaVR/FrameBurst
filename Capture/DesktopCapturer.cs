@@ -6,7 +6,7 @@ using Vortice.DXGI;
 
 namespace FrameBurst.Capture;
 
-public sealed record OutputInfo(string DeviceName, Rectangle Bounds, string Gpu, GpuVendor Vendor, uint BitsPerColor, string Rotation);
+public sealed record OutputInfo(string DeviceName, Rectangle Bounds, string Gpu, GpuVendor Vendor, uint BitsPerColor, string Rotation, bool IsHdr = false);
 
 public sealed record AdapterInfo(string Name, GpuVendor Vendor, ulong VramBytes, uint VendorId, uint DeviceId, List<OutputInfo> Outputs);
 
@@ -51,7 +51,8 @@ public sealed class DesktopCapturer : IDisposable
         {
             var d = o6.Description1;
             if (!d.AttachedToDesktop) return null;
-            return new OutputInfo(d.DeviceName, ToRect(d.DesktopCoordinates), gpu, vendor, d.BitsPerColor, d.Rotation.ToString());
+            return new OutputInfo(d.DeviceName, ToRect(d.DesktopCoordinates), gpu, vendor, d.BitsPerColor, d.Rotation.ToString(),
+                d.ColorSpace == ColorSpaceType.RgbFullG2084NoneP2020);
         }
         var dd = output.Description;
         if (!dd.AttachedToDesktop) return null;
@@ -76,16 +77,17 @@ public sealed class DesktopCapturer : IDisposable
         }
     }
 
-    public CaptureSet CaptureAll()
+    /// <param name="hdr">Also produce a 16-bit PQ copy of every monitor that is in HDR mode.</param>
+    public CaptureSet CaptureAll(bool hdr = false)
     {
         lock (_lock)
         {
-            try { return CaptureCore(); }
+            try { return CaptureCore(hdr); }
             catch (SharpGenException ex) when (IsDeviceLost(ex))
             {
                 // Driver update / TDR / GPU switch: rebuild devices once and retry.
                 ResetDevices();
-                return CaptureCore();
+                return CaptureCore(hdr);
             }
         }
     }
@@ -113,13 +115,13 @@ public sealed class DesktopCapturer : IDisposable
         public required GpuDevice Dev;
         public required OutputInfo Info;
         public required int W, H;
-        public ID3D11Texture2D? Staging;
+        public ID3D11Texture2D? Staging, HdrStaging;
         public ID3D11Query? TsStart, TsEnd, TsDisjoint;
         public readonly List<IDisposable> Trash = new();
-        public void Dispose() { foreach (var t in Trash) t.Dispose(); Staging?.Dispose(); TsStart?.Dispose(); TsEnd?.Dispose(); TsDisjoint?.Dispose(); }
+        public void Dispose() { foreach (var t in Trash) t.Dispose(); Staging?.Dispose(); HdrStaging?.Dispose(); TsStart?.Dispose(); TsEnd?.Dispose(); TsDisjoint?.Dispose(); }
     }
 
-    private CaptureSet CaptureCore()
+    private CaptureSet CaptureCore(bool hdr)
     {
         var total = Stopwatch.StartNew();
         var timings = new CaptureTimings();
@@ -162,7 +164,7 @@ public sealed class DesktopCapturer : IDisposable
             var gpu = Stopwatch.StartNew();
             foreach (var (dev, info, tex) in acquired)
             {
-                pending.Add(Dispatch(dev, info, tex));
+                pending.Add(Dispatch(dev, info, tex, hdr && info.IsHdr));
                 tex.Dispose();
             }
             foreach (var d in pending.Select(p => p.Dev).Distinct()) d.Context.Flush();
@@ -177,6 +179,7 @@ public sealed class DesktopCapturer : IDisposable
                 frames.Add(new MonitorFrame
                 {
                     DeviceName = p.Info.DeviceName, Bounds = p.Info.Bounds, GpuName = p.Dev.Name, Vendor = p.Dev.Vendor, Bgra = bgra,
+                    IsHdr = p.Info.IsHdr, Hdr = p.HdrStaging != null ? ReadBack16(p.Dev.Context, p.HdrStaging, p.W, p.H) : null,
                 });
                 Log.Write($"readback {p.Info.DeviceName}: {p.W}x{p.H} nonBlack={NonBlackPercent(bgra):0.0}%");
                 if (TryGetShaderTime(p, out var ms)) { shaderMs += ms; haveTs = true; }
@@ -193,7 +196,7 @@ public sealed class DesktopCapturer : IDisposable
         }
     }
 
-    private static Pending Dispatch(GpuDevice dev, OutputInfo info, ID3D11Texture2D src)
+    private static Pending Dispatch(GpuDevice dev, OutputInfo info, ID3D11Texture2D src, bool hdr)
     {
         var ctx = dev.Context;
         int w = info.Bounds.Width, h = info.Bounds.Height;
@@ -225,6 +228,20 @@ public sealed class DesktopCapturer : IDisposable
         ctx.CSSetUnorderedAccessView(0, outUav, unchecked((uint)-1));
         ctx.Dispatch(((uint)w + 15) / 16, ((uint)h + 15) / 16, 1);
 
+        ID3D11Texture2D? hdrTex = null;
+        if (hdr && src.Description.Format == Format.R16G16B16A16_Float)
+        {
+            hdrTex = dev.Device.CreateTexture2D(new Texture2DDescription(Format.R16G16B16A16_UNorm, (uint)w, (uint)h, 1, 1,
+                BindFlags.UnorderedAccess, ResourceUsage.Default, CpuAccessFlags.None, 1, 0, ResourceOptionFlags.None));
+            var hdrUav = dev.Device.CreateUnorderedAccessView(hdrTex, null);
+            p.Trash.Add(hdrTex); p.Trash.Add(hdrUav);
+            ctx.CSSetUnorderedAccessView(0, null!, unchecked((uint)-1));
+            ctx.CSSetShader(dev.HdrShader);
+            ctx.CSSetUnorderedAccessView(1, hdrUav, unchecked((uint)-1));
+            ctx.Dispatch(((uint)w + 15) / 16, ((uint)h + 15) / 16, 1);
+            ctx.CSSetUnorderedAccessView(1, null!, unchecked((uint)-1));
+        }
+
         ctx.End(p.TsEnd);
         ctx.End(p.TsDisjoint);
 
@@ -235,6 +252,12 @@ public sealed class DesktopCapturer : IDisposable
         p.Staging = dev.Device.CreateTexture2D(new Texture2DDescription(Format.R8G8B8A8_UNorm, (uint)w, (uint)h, 1, 1,
             BindFlags.None, ResourceUsage.Staging, CpuAccessFlags.Read, 1, 0, ResourceOptionFlags.None));
         ctx.CopyResource(p.Staging, outTex);
+        if (hdrTex != null)
+        {
+            p.HdrStaging = dev.Device.CreateTexture2D(new Texture2DDescription(Format.R16G16B16A16_UNorm, (uint)w, (uint)h, 1, 1,
+                BindFlags.None, ResourceUsage.Staging, CpuAccessFlags.Read, 1, 0, ResourceOptionFlags.None));
+            ctx.CopyResource(p.HdrStaging, hdrTex);
+        }
         return p;
     }
 
@@ -256,6 +279,28 @@ public sealed class DesktopCapturer : IDisposable
             fixed (byte* d = dst)
             {
                 byte* dp = d;
+                Parallel.For(0, h, y => Buffer.MemoryCopy(basePtr + y * pitch, dp + (long)y * rowBytes, rowBytes, rowBytes));
+            }
+            return dst;
+        }
+        finally
+        {
+            ctx.Unmap(staging, 0);
+        }
+    }
+
+    private static unsafe ushort[] ReadBack16(ID3D11DeviceContext ctx, ID3D11Texture2D staging, int w, int h)
+    {
+        var map = ctx.Map(staging, 0, MapMode.Read, Vortice.Direct3D11.MapFlags.None);
+        try
+        {
+            var dst = new ushort[w * h * 4];
+            int rowBytes = w * 8;
+            byte* basePtr = (byte*)map.DataPointer;
+            uint pitch = map.RowPitch;
+            fixed (ushort* d = dst)
+            {
+                byte* dp = (byte*)d;
                 Parallel.For(0, h, y => Buffer.MemoryCopy(basePtr + y * pitch, dp + (long)y * rowBytes, rowBytes, rowBytes));
             }
             return dst;

@@ -195,6 +195,17 @@
                                 </ComboBox>
                             </Grid>
                         </Border>
+                        <Border Style="{StaticResource Card}">
+                            <Grid ColumnSpacing="16">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                <FontIcon Glyph="&#xE706;" FontSize="20" />
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="Save HDR copy" />
+                                    <TextBlock Text="When an HDR monitor is captured, also save a 16-bit HDR PNG (_HDR.png) without edits or cursor" Style="{StaticResource CardDescription}" TextWrapping="Wrap" />
+                                </StackPanel>
+                                <ToggleSwitch x:Name="HdrToggle" Grid.Column="2" MinWidth="0" VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
 
                         <TextBlock Text="After capture" Style="{StaticResource SectionHeader}" />
                         <Border Style="{StaticResource Card}">
