@@ -16,6 +16,7 @@ internal sealed class TrayMenu
     private readonly Microsoft.UI.Xaml.Window _host;
     private readonly Grid _root = new();
     private readonly IntPtr _hwnd;
+    private bool _closed;
 
     public TrayMenu()
     {
@@ -40,7 +41,9 @@ internal sealed class TrayMenu
         Native.SetForegroundWindow(_hwnd);
 
         flyout.ShouldConstrainToRootBounds = false;
-        flyout.Closed += (_, _) => _host.AppWindow.Hide();
+        flyout.MenuFlyoutPresenterStyle = (Style)Microsoft.UI.Xaml.Application.Current.Resources["TrayMenuPresenterStyle"];
+        // The flyout can finish closing after the host window is gone (e.g. Exit while the menu is open).
+        flyout.Closed += (_, _) => { if (!_closed) _host.AppWindow?.Hide(); };
         void Open() => flyout.ShowAt(_root, new FlyoutShowOptions
         {
             Position = new Windows.Foundation.Point(0, 0),
@@ -55,7 +58,11 @@ internal sealed class TrayMenu
         }
     }
 
-    public void Close() => _host.Close();
+    public void Close()
+    {
+        _closed = true;
+        _host.Close();
+    }
 
     public static MenuFlyoutItem Item(string text, string glyph, Action action, string? shortcut = null)
     {

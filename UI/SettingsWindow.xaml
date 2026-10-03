@@ -9,40 +9,31 @@
     </Window.SystemBackdrop>
 
     <Grid x:Name="Root">
-        <Grid.Resources>
-            <Style x:Key="Card" TargetType="Border">
-                <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
-                <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
-                <Setter Property="BorderThickness" Value="1" />
-                <Setter Property="CornerRadius" Value="{StaticResource OverlayCornerRadius}" />
-                <Setter Property="Padding" Value="16,12" />
-                <Setter Property="MinHeight" Value="64" />
-            </Style>
-            <Style x:Key="SectionHeader" TargetType="TextBlock" BasedOn="{StaticResource BodyStrongTextBlockStyle}">
-                <Setter Property="Margin" Value="1,24,0,8" />
-            </Style>
-            <Style x:Key="CardDescription" TargetType="TextBlock" BasedOn="{StaticResource CaptionTextBlockStyle}">
-                <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
-                <Setter Property="TextWrapping" Value="Wrap" />
-            </Style>
-        </Grid.Resources>
         <Grid.RowDefinitions>
             <RowDefinition Height="48" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
+        <Grid.KeyboardAccelerators>
+            <KeyboardAccelerator Key="Escape" Invoked="CancelAccelerator_Invoked" />
+            <KeyboardAccelerator Modifiers="Control" Key="S" Invoked="SaveAccelerator_Invoked" />
+        </Grid.KeyboardAccelerators>
 
-        <!-- Title bar -->
+        <!-- Title bar (drag region; caption buttons are drawn by the system on the right) -->
         <Grid x:Name="TitleBar" Padding="16,0,0,0">
-            <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+            <StackPanel x:Name="TitleContent" Orientation="Horizontal" Spacing="{StaticResource Space12}" VerticalAlignment="Center">
                 <Image x:Name="TitleIcon" Width="16" Height="16" />
-                <TextBlock Text="FrameBurst Settings" Style="{StaticResource CaptionTextBlockStyle}" VerticalAlignment="Center" />
+                <TextBlock Style="{StaticResource CaptionTextBlockStyle}" VerticalAlignment="Center">
+                    <Run Text="FrameBurst" Foreground="{ThemeResource TextPrimaryBrush}" />
+                    <Run Text="  Settings" Foreground="{ThemeResource TextSecondaryBrush}" />
+                </TextBlock>
             </StackPanel>
         </Grid>
 
-        <NavigationView x:Name="Nav" Grid.Row="1" PaneDisplayMode="Left" IsBackButtonVisible="Collapsed"
-                        IsSettingsVisible="False" IsPaneToggleButtonVisible="False" OpenPaneLength="200"
-                        SelectionChanged="Nav_SelectionChanged">
+        <NavigationView x:Name="Nav" Grid.Row="1" PaneDisplayMode="Auto" IsBackButtonVisible="Collapsed"
+                        CompactModeThresholdWidth="0" ExpandedModeThresholdWidth="760"
+                        IsSettingsVisible="False" IsPaneToggleButtonVisible="False" OpenPaneLength="208"
+                        IsTitleBarAutoPaddingEnabled="False" SelectionChanged="Nav_SelectionChanged">
             <NavigationView.MenuItems>
                 <NavigationViewItem Content="Capture" Tag="Capture" IsSelected="True">
                     <NavigationViewItem.Icon><FontIcon Glyph="&#xE722;" /></NavigationViewItem.Icon>
@@ -55,268 +46,180 @@
                 </NavigationViewItem>
             </NavigationView.MenuItems>
 
-            <ScrollViewer Padding="32,0,32,24">
-                <Grid MaxWidth="820">
+            <ScrollViewer x:Name="PageScroller" Padding="{StaticResource PagePadding}">
+                <Grid MaxWidth="{StaticResource ContentMaxWidth}" HorizontalAlignment="Stretch">
 
-                    <!-- Capture -->
-                    <StackPanel x:Name="CapturePage" Spacing="4">
-                        <TextBlock Text="Capture" Style="{StaticResource TitleTextBlockStyle}" Margin="0,8,0,0" />
-                        <TextBlock Text="Hotkeys" Style="{StaticResource SectionHeader}" />
-                        <InfoBar IsOpen="True" IsClosable="False" Severity="Informational" Margin="0,0,0,4"
-                                 Message="Click a box and press a key combination. Backspace clears it. If PrintScreen won't register, turn off &quot;Use the Print screen key to open screen capture&quot; in Windows Settings › Accessibility › Keyboard." />
-                        <Border Style="{StaticResource Card}">
-                            <Grid ColumnSpacing="16">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                                <FontIcon Glyph="&#xF407;" FontSize="20" />
-                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                    <TextBlock Text="Region" />
-                                    <TextBlock Text="Freeze the screen, then drag an area or click a window" Style="{StaticResource CardDescription}" />
-                                </StackPanel>
-                                <ui:HotkeyBox x:Name="HkRegion" Grid.Column="2" Width="220" VerticalAlignment="Center" />
-                            </Grid>
-                        </Border>
-                        <Border Style="{StaticResource Card}">
-                            <Grid ColumnSpacing="16">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                                <FontIcon Glyph="&#xE7F4;" FontSize="20" />
-                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                    <TextBlock Text="All monitors" />
-                                    <TextBlock Text="The whole desktop in one image" Style="{StaticResource CardDescription}" />
-                                </StackPanel>
-                                <ui:HotkeyBox x:Name="HkFull" Grid.Column="2" Width="220" VerticalAlignment="Center" />
-                            </Grid>
-                        </Border>
-                        <Border Style="{StaticResource Card}">
-                            <Grid ColumnSpacing="16">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                                <FontIcon Glyph="&#xE7F8;" FontSize="20" />
-                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                    <TextBlock Text="Monitor under cursor" />
-                                    <TextBlock Text="The display the mouse is on" Style="{StaticResource CardDescription}" />
-                                </StackPanel>
-                                <ui:HotkeyBox x:Name="HkMonitor" Grid.Column="2" Width="220" VerticalAlignment="Center" />
-                            </Grid>
-                        </Border>
-                        <Border Style="{StaticResource Card}">
-                            <Grid ColumnSpacing="16">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                                <FontIcon Glyph="&#xE737;" FontSize="20" />
-                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                    <TextBlock Text="Active window" />
-                                    <TextBlock Text="The window in the foreground" Style="{StaticResource CardDescription}" />
-                                </StackPanel>
-                                <ui:HotkeyBox x:Name="HkWindow" Grid.Column="2" Width="220" VerticalAlignment="Center" />
-                            </Grid>
-                        </Border>
+                    <!-- ===================================================== Capture -->
+                    <StackPanel x:Name="CapturePage">
+                        <StackPanel.Transitions><TransitionCollection><EntranceThemeTransition FromVerticalOffset="12" /></TransitionCollection></StackPanel.Transitions>
+                        <TextBlock Text="Capture" Style="{StaticResource PageTitleStyle}" />
 
-                        <TextBlock Text="Behaviour" Style="{StaticResource SectionHeader}" />
-                        <Border Style="{StaticResource Card}">
-                            <Grid ColumnSpacing="16">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                                <FontIcon Glyph="&#xE916;" FontSize="20" />
-                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                    <TextBlock Text="Delay" />
-                                    <TextBlock Text="Milliseconds to wait before capturing" Style="{StaticResource CardDescription}" />
-                                </StackPanel>
-                                <NumberBox x:Name="Delay" Grid.Column="2" Width="160" VerticalAlignment="Center" Minimum="0" Maximum="10000"
+                        <TextBlock Text="Hotkeys" Style="{StaticResource SectionHeadingStyle}" />
+                        <TextBlock Style="{StaticResource InlineHintStyle}">
+                            <Run Text="Click a box and press a key combination. Backspace clears it. If PrintScreen won't register, turn off &quot;Use the Print screen key to open screen capture&quot; in Windows Settings › Accessibility › Keyboard." />
+                        </TextBlock>
+                        <ui:SettingsGroup AutomationProperties.Name="Hotkeys">
+                            <ui:SettingsRow Glyph="&#xF407;" Header="Region" Description="Freeze the screen, then drag an area or click a window">
+                                <ui:HotkeyBox x:Name="HkRegion" Width="{StaticResource ActionColumnWidth}" />
+                            </ui:SettingsRow>
+                            <ui:SettingsRow Glyph="&#xE7F4;" Header="All monitors" Description="The whole desktop in one image">
+                                <ui:HotkeyBox x:Name="HkFull" Width="{StaticResource ActionColumnWidth}" />
+                            </ui:SettingsRow>
+                            <ui:SettingsRow Glyph="&#xE7F8;" Header="Monitor under cursor" Description="The display the mouse is on">
+                                <ui:HotkeyBox x:Name="HkMonitor" Width="{StaticResource ActionColumnWidth}" />
+                            </ui:SettingsRow>
+                            <ui:SettingsRow Glyph="&#xE737;" Header="Active window" Description="The window in the foreground">
+                                <ui:HotkeyBox x:Name="HkWindow" Width="{StaticResource ActionColumnWidth}" />
+                            </ui:SettingsRow>
+                        </ui:SettingsGroup>
+
+                        <TextBlock Text="Behaviour" Style="{StaticResource SectionHeadingStyle}" />
+                        <ui:SettingsGroup AutomationProperties.Name="Behaviour">
+                            <ui:SettingsRow Glyph="&#xE916;" Header="Delay" Description="Milliseconds to wait before capturing">
+                                <NumberBox x:Name="Delay" Width="160" Minimum="0" Maximum="10000"
                                            SmallChange="250" LargeChange="1000" SpinButtonPlacementMode="Inline" />
-                            </Grid>
-                        </Border>
-                        <Border Style="{StaticResource Card}">
-                            <Grid ColumnSpacing="16">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                                <FontIcon Glyph="&#xE8B0;" FontSize="20" />
-                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                    <TextBlock Text="Include mouse cursor" />
-                                    <TextBlock Text="Draw the pointer into the screenshot" Style="{StaticResource CardDescription}" />
-                                </StackPanel>
-                                <ToggleSwitch x:Name="CursorToggle" Grid.Column="2" MinWidth="0" VerticalAlignment="Center" />
-                            </Grid>
-                        </Border>
+                            </ui:SettingsRow>
+                            <ui:SettingsRow Glyph="&#xE8B0;" Header="Include mouse cursor" Description="Draw the pointer into the screenshot">
+                                <ToggleSwitch x:Name="CursorToggle" MinWidth="0" />
+                            </ui:SettingsRow>
+                        </ui:SettingsGroup>
                     </StackPanel>
 
-                    <!-- Output -->
-                    <StackPanel x:Name="OutputPage" Spacing="4" Visibility="Collapsed">
-                        <TextBlock Text="Output" Style="{StaticResource TitleTextBlockStyle}" Margin="0,8,0,0" />
-                        <TextBlock Text="File" Style="{StaticResource SectionHeader}" />
-                        <Border Style="{StaticResource Card}">
-                            <Grid ColumnSpacing="16" RowSpacing="10">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-                                <FontIcon Glyph="&#xE838;" FontSize="20" />
-                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                    <TextBlock Text="Screenshot folder" />
-                                    <TextBlock Text="Where saved captures go" Style="{StaticResource CardDescription}" />
-                                </StackPanel>
-                                <Button Grid.Column="2" Content="Browse…" Click="Browse_Click" VerticalAlignment="Center" />
-                                <TextBox x:Name="Folder" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" />
-                            </Grid>
-                        </Border>
-                        <Border Style="{StaticResource Card}">
-                            <Grid ColumnSpacing="16" RowSpacing="10">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-                                <FontIcon Glyph="&#xE787;" FontSize="20" />
-                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                    <TextBlock Text="Dated subfolders" />
-                                    <TextBlock Text="Sort captures by the date they were taken. Use \ between levels, e.g. {yyyy}\{MM}\{dd} or {yyyy}\{MM MMMM}" Style="{StaticResource CardDescription}" TextWrapping="Wrap" />
-                                </StackPanel>
-                                <ToggleSwitch x:Name="DateFolderToggle" Grid.Column="2" MinWidth="0" VerticalAlignment="Center" />
-                                <TextBox x:Name="DateFolderPattern" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" />
-                            </Grid>
-                        </Border>
-                        <Border Style="{StaticResource Card}">
-                            <Grid ColumnSpacing="16" RowSpacing="10">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-                                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-                                <FontIcon Glyph="&#xE8AC;" FontSize="20" />
-                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                    <TextBlock Text="File name" />
-                                    <TextBlock Style="{StaticResource CardDescription}">
+                    <!-- ===================================================== Output -->
+                    <StackPanel x:Name="OutputPage" Visibility="Collapsed">
+                        <StackPanel.Transitions><TransitionCollection><EntranceThemeTransition FromVerticalOffset="12" /></TransitionCollection></StackPanel.Transitions>
+                        <TextBlock Text="Output" Style="{StaticResource PageTitleStyle}" />
+
+                        <TextBlock Text="File" Style="{StaticResource SectionHeadingStyle}" />
+                        <ui:SettingsGroup AutomationProperties.Name="File">
+                            <ui:SettingsRow Glyph="&#xE838;" Header="Screenshot folder" Description="Where saved captures go">
+                                <Button Content="Browse…" Style="{StaticResource SecondaryButtonStyle}" Click="Browse_Click" />
+                                <ui:SettingsRow.Footer>
+                                    <TextBox x:Name="Folder" AutomationProperties.Name="Screenshot folder path" />
+                                </ui:SettingsRow.Footer>
+                            </ui:SettingsRow>
+                            <ui:SettingsRow Glyph="&#xE787;" Header="Dated subfolders"
+                                            Description="Sort captures by the date they were taken. Use \ between levels, e.g. {yyyy}\{MM}\{dd} or {yyyy}\{MM MMMM}">
+                                <ToggleSwitch x:Name="DateFolderToggle" MinWidth="0" />
+                                <ui:SettingsRow.Footer>
+                                    <TextBox x:Name="DateFolderPattern" FontFamily="{StaticResource MonoFontFamily}" AutomationProperties.Name="Subfolder pattern" />
+                                </ui:SettingsRow.Footer>
+                            </ui:SettingsRow>
+                            <ui:SettingsRow Glyph="&#xE8AC;" Header="File name">
+                                <ui:SettingsRow.Description>
+                                    <TextBlock Style="{StaticResource CaptionStyle}">
                                         <Run Text="Text in {braces} is a .NET date format, e.g. {yyyy-MM-dd_HH-mm-ss}." />
                                         <Hyperlink NavigateUri="https://learn.microsoft.com/en-us/dotnet/standard/base-types/custom-date-and-time-format-strings">Read more</Hyperlink>
                                     </TextBlock>
-                                </StackPanel>
-                                <TextBox x:Name="Pattern" Grid.Row="1" Grid.Column="1" />
-                            </Grid>
-                        </Border>
-                        <Border Style="{StaticResource Card}">
-                            <Grid ColumnSpacing="16">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                                <FontIcon Glyph="&#xE9E9;" FontSize="20" />
-                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                    <TextBlock Text="PNG compression" />
-                                    <TextBlock Text="PNG is lossless at every setting: this only trades file size for speed" Style="{StaticResource CardDescription}" />
-                                </StackPanel>
-                                <ComboBox x:Name="Png" Grid.Column="2" Width="200" VerticalAlignment="Center">
+                                </ui:SettingsRow.Description>
+                                <ui:SettingsRow.Footer>
+                                    <TextBox x:Name="Pattern" FontFamily="{StaticResource MonoFontFamily}" AutomationProperties.Name="File name pattern" />
+                                </ui:SettingsRow.Footer>
+                            </ui:SettingsRow>
+                            <ui:SettingsRow Glyph="&#xE9E9;" Header="PNG compression"
+                                            Description="PNG is lossless at every setting: this only trades file size for speed">
+                                <ComboBox x:Name="Png" Width="{StaticResource ActionColumnWidth}">
                                     <x:String>Fast (largest files)</x:String>
                                     <x:String>Balanced</x:String>
                                     <x:String>Smallest (slowest)</x:String>
                                 </ComboBox>
-                            </Grid>
-                        </Border>
-                        <Border Style="{StaticResource Card}">
-                            <Grid ColumnSpacing="16">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                                <FontIcon Glyph="&#xE706;" FontSize="20" />
-                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                    <TextBlock Text="Save HDR copy" />
-                                    <TextBlock Text="When an HDR monitor is captured, also save a 16-bit HDR PNG (_HDR.png) without edits or cursor" Style="{StaticResource CardDescription}" TextWrapping="Wrap" />
-                                </StackPanel>
-                                <ToggleSwitch x:Name="HdrToggle" Grid.Column="2" MinWidth="0" VerticalAlignment="Center" />
-                            </Grid>
-                        </Border>
+                            </ui:SettingsRow>
+                            <ui:SettingsRow Glyph="&#xE706;" Header="Save HDR copy"
+                                            Description="When an HDR monitor is captured, also save a 16-bit HDR PNG (_HDR.png) without edits or cursor">
+                                <ToggleSwitch x:Name="HdrToggle" MinWidth="0" />
+                            </ui:SettingsRow>
+                        </ui:SettingsGroup>
 
-                        <TextBlock Text="After capture" Style="{StaticResource SectionHeader}" />
-                        <Border Style="{StaticResource Card}">
-                            <Grid ColumnSpacing="16">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                                <FontIcon Glyph="&#xE74E;" FontSize="20" />
-                                <TextBlock Grid.Column="1" Text="Save to file" VerticalAlignment="Center" />
-                                <ToggleSwitch x:Name="SaveToggle" Grid.Column="2" MinWidth="0" VerticalAlignment="Center" />
-                            </Grid>
-                        </Border>
-                        <Border Style="{StaticResource Card}">
-                            <Grid ColumnSpacing="16">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                                <FontIcon Glyph="&#xE8C8;" FontSize="20" />
-                                <TextBlock Grid.Column="1" Text="Copy to clipboard" VerticalAlignment="Center" />
-                                <ToggleSwitch x:Name="ClipToggle" Grid.Column="2" MinWidth="0" VerticalAlignment="Center" />
-                            </Grid>
-                        </Border>
-                        <Border Style="{StaticResource Card}">
-                            <Grid ColumnSpacing="16">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                                <FontIcon Glyph="&#xEA8F;" FontSize="20" />
-                                <TextBlock Grid.Column="1" Text="Show notification" VerticalAlignment="Center" />
-                                <ToggleSwitch x:Name="NotifyToggle" Grid.Column="2" MinWidth="0" VerticalAlignment="Center" />
-                            </Grid>
-                        </Border>
+                        <TextBlock Text="After capture" Style="{StaticResource SectionHeadingStyle}" />
+                        <ui:SettingsGroup AutomationProperties.Name="After capture">
+                            <ui:SettingsRow Glyph="&#xE74E;" Header="Save to file">
+                                <ToggleSwitch x:Name="SaveToggle" MinWidth="0" />
+                            </ui:SettingsRow>
+                            <ui:SettingsRow Glyph="&#xE8C8;" Header="Copy to clipboard">
+                                <ToggleSwitch x:Name="ClipToggle" MinWidth="0" />
+                            </ui:SettingsRow>
+                            <ui:SettingsRow Glyph="&#xEA8F;" Header="Show notification">
+                                <ToggleSwitch x:Name="NotifyToggle" MinWidth="0" />
+                            </ui:SettingsRow>
+                        </ui:SettingsGroup>
                     </StackPanel>
 
-                    <!-- About -->
-                    <StackPanel x:Name="AboutPage" Spacing="4" Visibility="Collapsed">
-                        <TextBlock Text="About" Style="{StaticResource TitleTextBlockStyle}" Margin="0,8,0,0" />
-                        <Border Style="{StaticResource Card}" Margin="0,24,0,0" Padding="20,16">
-                            <Grid ColumnSpacing="20">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-                                <Image x:Name="AboutIcon" Width="56" Height="56" VerticalAlignment="Top" />
-                                <StackPanel Grid.Column="1" Spacing="4">
-                                    <TextBlock Text="FrameBurst" Style="{StaticResource SubtitleTextBlockStyle}" />
-                                    <TextBlock x:Name="VersionText" Style="{StaticResource CardDescription}" />
-                                    <TextBlock TextWrapping="Wrap" Margin="0,6,0,0"
-                                               Text="A system tray screenshot tool built for the highest-quality capture possible. Capture and colour conversion run on the GPU through Direct3D 11, so captures are pixel-exact, fast, and work over full-screen games. Annotate before you pick a region, then save lossless PNGs (with an optional HDR copy) or copy straight to the clipboard." />
-                                    <StackPanel Orientation="Horizontal" Spacing="16" Margin="0,4,0,0">
-                                        <HyperlinkButton x:Name="ReleaseNotes" Content="Release notes" Padding="0" />
-                                        <HyperlinkButton x:Name="SourceLink" Content="Source code" Padding="0" />
-                                        <TextBlock Text="Licensed under the GNU GPL v3.0" Style="{StaticResource CardDescription}" VerticalAlignment="Center" />
-                                    </StackPanel>
-                                </StackPanel>
-                            </Grid>
-                        </Border>
+                    <!-- ===================================================== About -->
+                    <StackPanel x:Name="AboutPage" Visibility="Collapsed">
+                        <StackPanel.Transitions><TransitionCollection><EntranceThemeTransition FromVerticalOffset="12" /></TransitionCollection></StackPanel.Transitions>
+                        <TextBlock Text="About" Style="{StaticResource PageTitleStyle}" />
 
-                        <TextBlock Text="Updates" Style="{StaticResource SectionHeader}" />
-                        <Border Style="{StaticResource Card}">
-                            <Grid ColumnSpacing="16" RowSpacing="10">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-                                <FontIcon x:Name="UpdateGlyph" Glyph="&#xE895;" FontSize="20" />
-                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                    <TextBlock x:Name="UpdateTitle" Text="Check for updates" />
-                                    <TextBlock x:Name="UpdateStatus" Text="See whether a newer version of FrameBurst is available" Style="{StaticResource CardDescription}" />
+                        <!-- Product header: flat, no card - the logo and type carry it. -->
+                        <Grid Margin="2,24,0,0" ColumnSpacing="{StaticResource Space20}">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                            <Image x:Name="AboutIcon" Width="64" Height="64" VerticalAlignment="Top" />
+                            <StackPanel Grid.Column="1" Spacing="{StaticResource Space4}">
+                                <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space12}">
+                                    <TextBlock Text="FrameBurst" Style="{StaticResource SubtitleTextBlockStyle}" Foreground="{ThemeResource TextPrimaryBrush}" />
+                                    <TextBlock x:Name="VersionText" Style="{StaticResource MonoTextStyle}" VerticalAlignment="Center" Margin="0,3,0,0" />
                                 </StackPanel>
-                                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                <TextBlock Style="{StaticResource BodySecondaryStyle}" TextWrapping="Wrap" MaxWidth="620" HorizontalAlignment="Left"
+                                           Text="A system tray screenshot tool built for the highest-quality capture possible. Capture and colour conversion run on the GPU through Direct3D 11, so captures are pixel-exact, fast, and work over full-screen games. Annotate before you pick a region, then save lossless PNGs (with an optional HDR copy) or copy straight to the clipboard." />
+                                <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space16}" Margin="0,6,0,0">
+                                    <HyperlinkButton x:Name="ReleaseNotes" Content="Release notes" Style="{StaticResource InlineLinkStyle}" />
+                                    <HyperlinkButton x:Name="SourceLink" Content="Source code" Style="{StaticResource InlineLinkStyle}" />
+                                    <TextBlock Text="GNU GPL v3.0" Style="{StaticResource CaptionStyle}" Foreground="{ThemeResource TextMutedBrush}" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Grid>
+
+                        <TextBlock Text="Updates" Style="{StaticResource SectionHeadingStyle}" />
+                        <ui:SettingsGroup AutomationProperties.Name="Updates">
+                            <!-- Header / Description are driven by SetUpdateState; live region so state changes are announced. -->
+                            <ui:SettingsRow x:Name="UpdateRow" Header="Check for updates"
+                                            Description="See whether a newer version of FrameBurst is available"
+                                            AutomationProperties.LiveSetting="Polite">
+                                <ui:SettingsRow.Icon><FontIcon x:Name="UpdateGlyph" Glyph="&#xE895;" /></ui:SettingsRow.Icon>
+                                <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space8}">
                                     <ProgressRing x:Name="UpdateRing" Width="20" Height="20" IsActive="False" Visibility="Collapsed" />
-                                    <Button x:Name="CheckButton" Content="Check for updates" Click="CheckNow_Click" />
-                                    <Button x:Name="InstallButton" Content="Download and install" Style="{StaticResource AccentButtonStyle}"
+                                    <Button x:Name="CheckButton" Content="Check for updates" Style="{StaticResource SecondaryButtonStyle}" Click="CheckNow_Click" />
+                                    <Button x:Name="InstallButton" Content="Download and install" Style="{StaticResource PrimaryButtonStyle}"
                                             Click="Install_Click" Visibility="Collapsed" />
                                 </StackPanel>
-                                <ProgressBar x:Name="DownloadProgress" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Visibility="Collapsed" />
-                            </Grid>
-                        </Border>
-                        <Border Style="{StaticResource Card}">
-                            <Grid ColumnSpacing="16">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                                <FontIcon Glyph="&#xE823;" FontSize="20" />
-                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                    <TextBlock Text="Check for updates automatically" />
-                                    <TextBlock Text="FrameBurst checks GitHub once a day and asks before installing anything" Style="{StaticResource CardDescription}" />
-                                </StackPanel>
-                                <ToggleSwitch x:Name="AutoUpdate" Grid.Column="2" MinWidth="0" VerticalAlignment="Center" />
-                            </Grid>
-                        </Border>
+                                <ui:SettingsRow.Footer>
+                                    <ProgressBar x:Name="DownloadProgress" Visibility="Collapsed" AutomationProperties.Name="Download progress" />
+                                </ui:SettingsRow.Footer>
+                            </ui:SettingsRow>
+                            <ui:SettingsRow Glyph="&#xE823;" Header="Check for updates automatically"
+                                            Description="FrameBurst checks GitHub once a day and asks before installing anything">
+                                <ToggleSwitch x:Name="AutoUpdate" MinWidth="0" />
+                            </ui:SettingsRow>
+                        </ui:SettingsGroup>
 
-                        <TextBlock Text="Support FrameBurst" Style="{StaticResource SectionHeader}" />
-                        <Border Style="{StaticResource Card}">
-                            <Grid ColumnSpacing="16">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                                <FontIcon Glyph="&#xEB51;" FontSize="20" />
-                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                    <TextBlock Text="Leave a tip" />
-                                    <TextBlock Text="FrameBurst is free and open source. If it saves you time, a tip helps keep it going." Style="{StaticResource CardDescription}" />
-                                </StackPanel>
-                                <Button Grid.Column="2" Click="Tip_Click" VerticalAlignment="Center" Padding="10,6,14,6"
-                                        ToolTipService.ToolTip="cash.app/$LunoviaVR">
-                                    <StackPanel Orientation="Horizontal" Spacing="10">
-                                        <Image x:Name="CashAppLogo" Width="22" Height="22" />
+                        <TextBlock Text="Support FrameBurst" Style="{StaticResource SectionHeadingStyle}" />
+                        <ui:SettingsGroup AutomationProperties.Name="Support FrameBurst">
+                            <ui:SettingsRow Glyph="&#xEB51;" Header="Leave a tip"
+                                            Description="FrameBurst is free and open source. If it saves you time, a tip helps keep it going.">
+                                <Button Click="Tip_Click" Style="{StaticResource SecondaryButtonStyle}" Padding="10,5,14,6"
+                                        ToolTipService.ToolTip="cash.app/$LunoviaVR" AutomationProperties.Name="Tip with Cash App">
+                                    <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space8}">
+                                        <Image x:Name="CashAppLogo" Width="20" Height="20" />
                                         <TextBlock Text="Tip" VerticalAlignment="Center" />
                                     </StackPanel>
                                 </Button>
-                            </Grid>
-                        </Border>
+                            </ui:SettingsRow>
+                        </ui:SettingsGroup>
                     </StackPanel>
                 </Grid>
             </ScrollViewer>
         </NavigationView>
 
         <!-- Footer -->
-        <Grid Grid.Row="2" Padding="24,12" ColumnSpacing="8"
-              Background="{ThemeResource LayerFillColorDefaultBrush}"
-              BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,1,0,0">
+        <Grid Grid.Row="2" Style="{StaticResource FooterBarStyle}">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-            <TextBlock x:Name="Error" Foreground="{ThemeResource SystemFillColorCriticalBrush}" TextWrapping="Wrap" VerticalAlignment="Center" />
-            <Button Grid.Column="1" Content="Save" Style="{StaticResource AccentButtonStyle}" MinWidth="120" Click="Save_Click" />
-            <Button Grid.Column="2" Content="Cancel" MinWidth="120" Click="Cancel_Click" />
+            <StackPanel x:Name="ErrorPanel" Orientation="Horizontal" Spacing="{StaticResource Space8}" VerticalAlignment="Center" Visibility="Collapsed">
+                <FontIcon Glyph="&#xE783;" FontSize="16" Foreground="{ThemeResource DangerBrush}" VerticalAlignment="Center" />
+                <TextBlock x:Name="Error" Foreground="{ThemeResource DangerBrush}" TextWrapping="Wrap" VerticalAlignment="Center" />
+            </StackPanel>
+            <Button Grid.Column="1" Content="Save" Style="{StaticResource PrimaryButtonStyle}" MinWidth="{StaticResource FooterButtonMinWidth}"
+                    Click="Save_Click" ToolTipService.ToolTip="Save (Ctrl+S)" />
+            <Button Grid.Column="2" Content="Cancel" Style="{StaticResource SecondaryButtonStyle}" MinWidth="{StaticResource FooterButtonMinWidth}"
+                    Click="Cancel_Click" ToolTipService.ToolTip="Cancel (Esc)" />
         </Grid>
     </Grid>
 </Window>

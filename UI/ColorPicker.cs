@@ -14,25 +14,23 @@ namespace FrameBurst.UI;
 /// </summary>
 internal sealed class ColorPicker : Form
 {
-    private const int Zoom = 12, SwatchSize = 42, Pad = 8, InfoHeight = 58;
+    private readonly int _zoom, _swatch, _pad, _infoHeight, _offset;  // device pixels, scaled from DIPs
     private readonly int _cells;      // magnifier cells per side (odd), sized so the readout text always fits
     private readonly int _textX;      // x offset of the hex / rgb text inside the panel
-    private static readonly Color Accent = Color.FromArgb(0, 168, 255);
+    private readonly OverlayTheme _theme;
+    private readonly GlassPanel _hintGlass = new();
 
     private readonly Rectangle _virtual;
     private readonly byte[] _bgra;
     private readonly Bitmap _frozen;
     private readonly List<Rectangle> _monitors;
     private readonly Rectangle _hint;
-    private readonly Font _hexFont = new("Consolas", 15f, FontStyle.Bold, GraphicsUnit.Pixel);
-    private readonly Font _smallFont = new("Consolas", 12f, FontStyle.Regular, GraphicsUnit.Pixel);
-    private readonly Font _hintFont = new("Segoe UI", 12f, FontStyle.Regular, GraphicsUnit.Pixel);
     private Point _mouse;
     private Rectangle _shownPanel;    // where the panel is (or is about to be) painted, for exact erasing
 
     /// <summary>Where the magnifier panel and hint bar are drawn now (client coordinates; used by the self-test).</summary>
     internal Rectangle PanelBounds => PanelRect();
-    internal Rectangle HintBounds => _hint;
+    internal Rectangle HintBounds => Rectangle.Inflate(_hint, _theme.Px(12), _theme.Px(12)); // pill plus its shadow
 
     /// <summary>The picked colour, or null if cancelled.</summary>
     public Color? Picked { get; private set; }
@@ -49,18 +47,21 @@ internal sealed class ColorPicker : Form
         var cursor = Cursor.Position;
         var home = _monitors.FirstOrDefault(m => m.Contains(cursor.X - _virtual.X, cursor.Y - _virtual.Y));
         if (home.IsEmpty) home = _monitors[0];
+        _theme = new OverlayTheme(Native.ScaleAt(home.X + _virtual.X + home.Width / 2, home.Y + _virtual.Y + home.Height / 2));
+        _zoom = _theme.Px(12); _swatch = _theme.Px(40); _pad = _theme.Px(OverlayTheme.Space8);
+        _infoHeight = _swatch + _pad * 2; _offset = _theme.Px(28);
         // Size everything from the widest possible text, so nothing is ever cut off or drawn outside.
         using (var bmp = new Bitmap(1, 1))
         using (var g = Graphics.FromImage(bmp))
         {
             g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
-            int hexW = (int)Math.Ceiling(g.MeasureString("#FFFFFF", _hexFont).Width);
-            int rgbW = (int)Math.Ceiling(g.MeasureString("rgb(255, 255, 255)", _smallFont).Width);
-            _textX = Pad + SwatchSize + Pad;
-            int needed = _textX + Math.Max(hexW, rgbW) + Pad;
-            _cells = Math.Max(13, (needed + Zoom - 1) / Zoom) | 1;
-            int hintW = (int)Math.Ceiling(g.MeasureString(HintText, _hintFont).Width) + 32;
-            _hint = new Rectangle(home.Left + (home.Width - hintW) / 2, home.Top + 16, hintW, 30);
+            int hexW = (int)Math.Ceiling(g.MeasureString("#FFFFFF", _theme.MonoStrong).Width);
+            int rgbW = (int)Math.Ceiling(g.MeasureString("rgb(255, 255, 255)", _theme.Mono).Width);
+            _textX = _pad + _swatch + _pad;
+            int needed = _textX + Math.Max(hexW, rgbW) + _pad;
+            _cells = Math.Max(13, (needed + _zoom - 1) / _zoom) | 1;
+            int hintW = (int)Math.Ceiling(g.MeasureString(HintText, _theme.Body).Width) + _theme.Px(32);
+            _hint = new Rectangle(home.Left + (home.Width - hintW) / 2, home.Top + _theme.Px(16), hintW, _theme.Px(30));
         }
 
         AutoScaleMode = AutoScaleMode.None;
@@ -158,12 +159,12 @@ internal sealed class ColorPicker : Form
 
     private Rectangle PanelRect()
     {
-        int size = _cells * Zoom, w = size, h = size + InfoHeight;
-        int x = _mouse.X + 28, y = _mouse.Y + 28;
+        int size = _cells * _zoom, w = size, h = size + _infoHeight;
+        int x = _mouse.X + _offset, y = _mouse.Y + _offset;
         var mon = _monitors.FirstOrDefault(m => m.Contains(_mouse));
         if (mon.IsEmpty) mon = ClientRectangle;
-        if (x + w > mon.Right) x = _mouse.X - 28 - w;
-        if (y + h > mon.Bottom) y = _mouse.Y - 28 - h;
+        if (x + w > mon.Right) x = _mouse.X - _offset - w;
+        if (y + h > mon.Bottom) y = _mouse.Y - _offset - h;
         return new Rectangle(x, y, w, h);
     }
 
@@ -179,13 +180,13 @@ internal sealed class ColorPicker : Form
         g.PixelOffsetMode = PixelOffsetMode.Default;
         g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
 
-        // Hint bar.
-        if (clip.IntersectsWith(_hint))
+        // Hint pill (frosted glass over the frozen screen; static, so its blur is computed once).
+        if (clip.IntersectsWith(HintBounds))
         {
-            using var bg = new SolidBrush(Color.FromArgb(225, 20, 20, 24));
-            g.FillRectangle(bg, _hint);
+            _hintGlass.Paint(g, _theme, _frozen, _hint, 0, OverlayTheme.GlassTint);
+            using var fg = new SolidBrush(OverlayTheme.Text);
             using var fmt = new StringFormat(StringFormatFlags.NoWrap) { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-            g.DrawString(HintText, _hintFont, Brushes.White, _hint, fmt);
+            g.DrawString(HintText, _theme.Body, fg, _hint, fmt);
         }
 
         // Magnifier panel, drawn at the position tracked in OnMouseMove and clipped to it.
@@ -193,34 +194,44 @@ internal sealed class ColorPicker : Form
         if (!clip.IntersectsWith(r)) return;
         var state = g.Save();
         g.SetClip(r);
-        int size = _cells * Zoom;
+        int size = _cells * _zoom;
         var dst = new Rectangle(r.X, r.Y, size, size);
-        using (var bg = new SolidBrush(Color.FromArgb(240, 20, 20, 24))) g.FillRectangle(bg, r);
+        _theme.PaintElevated(g, r);
+        using (var round = OverlayTheme.RoundRect(new RectangleF(r.X + 1, r.Y + 1, r.Width - 2, r.Height - 2), _theme.PxF(OverlayTheme.RadiusSurface)))
+            g.SetClip(round, CombineMode.Intersect);
+        g.SmoothingMode = SmoothingMode.None;
         g.PixelOffsetMode = PixelOffsetMode.Half;
         g.DrawImage(_frozen, dst, new Rectangle(_mouse.X - _cells / 2, _mouse.Y - _cells / 2, _cells, _cells), GraphicsUnit.Pixel);
         g.PixelOffsetMode = PixelOffsetMode.Default;
-        using (var grid = new Pen(Color.FromArgb(35, 255, 255, 255)))
+        using (var grid = new Pen(OverlayTheme.Divider))
             for (int i = 1; i < _cells; i++)
             {
-                g.DrawLine(grid, dst.X + i * Zoom, dst.Y, dst.X + i * Zoom, dst.Bottom);
-                g.DrawLine(grid, dst.X, dst.Y + i * Zoom, dst.Right, dst.Y + i * Zoom);
+                g.DrawLine(grid, dst.X + i * _zoom, dst.Y, dst.X + i * _zoom, dst.Bottom);
+                g.DrawLine(grid, dst.X, dst.Y + i * _zoom, dst.Right, dst.Y + i * _zoom);
             }
-        int c0 = _cells / 2 * Zoom;
-        using (var dark = new Pen(Color.Black, 3)) g.DrawRectangle(dark, dst.X + c0, dst.Y + c0, Zoom, Zoom);
-        using (var center = new Pen(Color.White, 1)) g.DrawRectangle(center, dst.X + c0, dst.Y + c0, Zoom, Zoom);
-        using (var border = new Pen(Color.FromArgb(120, 255, 255, 255))) g.DrawRectangle(border, r.X, r.Y, r.Width - 1, r.Height - 1);
+        int c0 = _cells / 2 * _zoom;
+        using (var dark = new Pen(Color.Black, 3)) g.DrawRectangle(dark, dst.X + c0, dst.Y + c0, _zoom, _zoom);
+        using (var center = new Pen(Color.White, 1)) g.DrawRectangle(center, dst.X + c0, dst.Y + c0, _zoom, _zoom);
+        using (var divider = new Pen(OverlayTheme.Border)) g.DrawLine(divider, r.X, dst.Bottom, r.Right, dst.Bottom);
 
         if (TryColorAt(_mouse, out var col))
         {
-            int top = dst.Bottom + Pad;
-            using (var sw = new SolidBrush(col)) g.FillRectangle(sw, r.X + Pad, top, SwatchSize, SwatchSize);
-            using (var swEdge = new Pen(Color.FromArgb(150, 255, 255, 255))) g.DrawRectangle(swEdge, r.X + Pad, top, SwatchSize, SwatchSize);
-            g.DrawString(Hex(col), _hexFont, Brushes.White, r.X + _textX, top);
-            g.DrawString($"rgb({col.R}, {col.G}, {col.B})", _smallFont, Brushes.Gainsboro, r.X + _textX, top + 22);
+            int top = dst.Bottom + _pad;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            var swr = new Rectangle(r.X + _pad, top, _swatch, _swatch);
+            _theme.FillRound(g, swr, col, OverlayTheme.RadiusControl);
+            using (var swEdge = new Pen(OverlayTheme.SwatchEdge))
+            using (var swPath = OverlayTheme.RoundRect(new RectangleF(swr.X + 0.5f, swr.Y + 0.5f, swr.Width - 1, swr.Height - 1), _theme.PxF(OverlayTheme.RadiusControl)))
+                g.DrawPath(swEdge, swPath);
+            using var fg = new SolidBrush(OverlayTheme.Text);
+            using var fg2 = new SolidBrush(OverlayTheme.TextSecondary);
+            g.DrawString(Hex(col), _theme.MonoStrong, fg, r.X + _textX, top);
+            g.DrawString($"rgb({col.R}, {col.G}, {col.B})", _theme.Mono, fg2, r.X + _textX, top + _theme.Px(22));
         }
         else
         {
-            g.DrawString("no screen here", _smallFont, Brushes.Gray, r.X + Pad, dst.Bottom + 20);
+            using var fg = new SolidBrush(OverlayTheme.TextDisabled);
+            g.DrawString("no screen here", _theme.Mono, fg, r.X + _pad, dst.Bottom + _theme.Px(20));
         }
         g.Restore(state);
     }
@@ -229,7 +240,7 @@ internal sealed class ColorPicker : Form
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) { _frozen.Dispose(); _hexFont.Dispose(); _smallFont.Dispose(); _hintFont.Dispose(); }
+        if (disposing) { _frozen.Dispose(); _hintGlass.Dispose(); _theme.Dispose(); }
         base.Dispose(disposing);
     }
 }

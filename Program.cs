@@ -8,10 +8,13 @@ internal static class Program
     private static int Main(string[] args)
     {
         if (args.Length > 0 && args[0] == "--selftest")
-            return SelfTest.Run(args.Skip(1).ToArray());
+        {
+            if (!args.Contains("--settingsui")) return SelfTest.Run(args.Skip(1).ToArray());
+            App.SettingsShotDir = args.Length > 1 && !args[1].StartsWith("--") ? args[1] : Path.Combine(Path.GetTempPath(), "FrameBurstSelfTest");
+        }
 
         using var mutex = new Mutex(true, @"Local\FrameBurst.SingleInstance", out bool first);
-        if (!first)
+        if (!first && App.SettingsShotDir == null)
         {
             MessageBox.Show("FrameBurst is already running (see the system tray).", "FrameBurst", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return 0;

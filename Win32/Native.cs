@@ -144,6 +144,17 @@ internal static partial class Native
     [LibraryImport("user32.dll")]
     public static partial uint GetDpiForWindow(IntPtr hWnd);
 
+    /// <summary>MDT_EFFECTIVE_DPI = 0: the DPI the user's scale setting gives that monitor.</summary>
+    [LibraryImport("shcore.dll")]
+    public static partial int GetDpiForMonitor(IntPtr hmonitor, int dpiType, out uint dpiX, out uint dpiY);
+
+    /// <summary>The display scale (1.0 = 100 %) of the monitor containing a screen point.</summary>
+    public static double ScaleAt(int x, int y)
+    {
+        var mon = MonitorFromPoint(new POINT { X = x, Y = y }, 2 /* MONITOR_DEFAULTTONEAREST */);
+        return mon != IntPtr.Zero && GetDpiForMonitor(mon, 0, out uint dpi, out _) == 0 && dpi > 0 ? dpi / 96.0 : 1.0;
+    }
+
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool GetWindowRect(IntPtr hWnd, out RECT rect);

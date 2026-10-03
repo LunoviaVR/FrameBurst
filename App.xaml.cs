@@ -8,6 +8,9 @@ public partial class App : Microsoft.UI.Xaml.Application
 {
     private TrayApp? _tray;
 
+    /// <summary>Set by `--selftest --settingsui`: render the WinUI windows to screenshots instead of starting the tray.</summary>
+    internal static string? SettingsShotDir { get; set; }
+
     public App()
     {
         InitializeComponent();
@@ -21,5 +24,9 @@ public partial class App : Microsoft.UI.Xaml.Application
         };
     }
 
-    protected override void OnLaunched(LaunchActivatedEventArgs args) => _tray = new TrayApp();
+    protected override void OnLaunched(LaunchActivatedEventArgs args)
+    {
+        if (SettingsShotDir != null) SelfTest.SettingsShots(SettingsShotDir);
+        else _tray = new TrayApp();
+    }
 }

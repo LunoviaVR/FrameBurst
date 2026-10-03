@@ -26,25 +26,19 @@ public sealed partial class SettingsWindow : Microsoft.UI.Xaml.Window
         _exitForUpdate = exitForUpdate;
         InitializeComponent();
 
-        ExtendsContentIntoTitleBar = true;
-        SetTitleBar(TitleBar);
-        string iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "FrameBurst.ico");
-        AppWindow.SetIcon(iconPath);
-        var icon = new BitmapImage(new Uri(iconPath));
-        TitleIcon.Source = icon;
+        WindowChrome.Apply(this, Root, TitleBar, TitleContent, tall: true);
+        TitleIcon.Source = new BitmapImage(new Uri(WindowChrome.IconPath));
         // Full-resolution artwork: an .ico decodes to its first (16 px) frame, and the logo is vector.
         string assets = Path.Combine(AppContext.BaseDirectory, "Assets");
         AboutIcon.Source = new BitmapImage(new Uri(Path.Combine(assets, "icon-256.png")));
         CashAppLogo.Source = new SvgImageSource(new Uri(Path.Combine(assets, "cashapp.svg")));
 
         if (AppWindow.Presenter is OverlappedPresenter p) { p.IsMinimizable = false; p.IsMaximizable = false; }
-        double scale = Native.GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(this)) / 96.0;
-        var size = new Windows.Graphics.SizeInt32((int)(900 * scale), (int)(680 * scale));
-        var area = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary).WorkArea;
-        AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(
-            area.X + (area.Width - size.Width) / 2, area.Y + (area.Height - size.Height) / 2, size.Width, size.Height));
+        WindowChrome.SizeAndCenter(this, 900, 700);
+        WindowChrome.SetMinimumSize(this, 560, 460);
+        Root.ActualThemeChanged += (_, _) => ApplyUpdateTone();
 
-        VersionText.Text = $"Version {Updater.Current}" + (Updater.IsInstalled ? "" : " (portable build)");
+        VersionText.Text = $"v{Updater.Current}" + (Updater.IsInstalled ? "" : " · portable build");
         ReleaseNotes.NavigateUri = new Uri(Updater.ReleasesPage);
         SourceLink.NavigateUri = new Uri($"https://github.com/{Updater.Repo}");
         LoadValues();
@@ -94,21 +88,44 @@ public sealed partial class SettingsWindow : Microsoft.UI.Xaml.Window
             var folder = await picker.PickSingleFolderAsync();
             if (folder != null) Folder.Text = folder.Path;
         }
-        catch (Exception ex) { Error.Text = ex.Message; }
+        catch (Exception ex) { ShowError(ex.Message); }
     }
 
     /// <summary>Opens the About page (used by the tray's "Check for updates" item) and optionally starts a check.</summary>
     public void ShowAbout(bool checkNow)
     {
-        Nav.SelectedItem = Nav.MenuItems.OfType<NavigationViewItem>().First(i => (string)i.Tag == "About");
+        ShowPage("About");
         if (checkNow) CheckNow_Click(this, new RoutedEventArgs());
     }
 
-    private void SetUpdateState(string title, string status, int glyph, bool busy)
+    /// <summary>Selects a page by its tag ("Capture", "Output" or "About").</summary>
+    internal void ShowPage(string tag) =>
+        Nav.SelectedItem = Nav.MenuItems.OfType<NavigationViewItem>().First(i => (string)i.Tag == tag);
+
+    /// <summary>Window client height (DIPs) that shows the current page without scrolling (self-test screenshots).</summary>
+    internal double HeightForWholePage => Root.ActualHeight - PageScroller.ViewportHeight + PageScroller.ExtentHeight;
+
+    private enum Tone { Neutral, Accent, Success, Caution, Critical }
+    private Tone _updateTone;
+
+    private void ApplyUpdateTone()
     {
-        UpdateTitle.Text = title;
-        UpdateStatus.Text = status;
+        string key = _updateTone switch
+        {
+            Tone.Accent => "AccentBrush", Tone.Success => "SuccessBrush", Tone.Caution => "WarningBrush", Tone.Critical => "DangerBrush",
+            _ => "TextPrimaryBrush",
+        };
+        UpdateGlyph.Foreground = (Microsoft.UI.Xaml.Media.Brush)Microsoft.UI.Xaml.Application.Current.Resources[key];
+    }
+
+    /// <summary>Updates the update row. State is always spelled out in the title; the glyph colour only reinforces it.</summary>
+    private void SetUpdateState(string title, string status, int glyph, bool busy, Tone tone = Tone.Neutral)
+    {
+        UpdateRow.Header = title;
+        UpdateRow.Description = status;
         UpdateGlyph.Glyph = char.ConvertFromUtf32(glyph);
+        _updateTone = tone;
+        ApplyUpdateTone();
         UpdateRing.IsActive = busy;
         UpdateRing.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
     }
@@ -125,14 +142,14 @@ public sealed partial class SettingsWindow : Microsoft.UI.Xaml.Window
             _update = await Updater.CheckAsync();
             if (_update == null)
             {
-                SetUpdateState("You're up to date", $"FrameBurst {Updater.Current} is the latest version", 0xE930, busy: false);
+                SetUpdateState("You're up to date", $"FrameBurst {Updater.Current} is the latest version", 0xE930, busy: false, Tone.Success);
             }
             else
             {
                 bool canInstall = Updater.IsInstalled && _update.InstallerUrl != null;
                 SetUpdateState($"FrameBurst {_update.Version} is available",
                     canInstall ? "FrameBurst will restart to finish installing" : "This copy wasn't installed with setup, so download it from GitHub",
-                    0xE896, busy: false);
+                    0xE896, busy: false, Tone.Accent);
                 InstallButton.Content = canInstall ? "Download and install" : "Open download page";
                 InstallButton.Visibility = Visibility.Visible;
             }
@@ -140,7 +157,7 @@ public sealed partial class SettingsWindow : Microsoft.UI.Xaml.Window
         catch (Exception ex)
         {
             Log.Write("update check failed: " + ex.Message);
-            SetUpdateState("Couldn't check for updates", ex.Message, 0xE7BA, busy: false);
+            SetUpdateState("Couldn't check for updates", ex.Message, 0xE7BA, busy: false, Tone.Caution);
         }
         finally
         {
@@ -162,23 +179,23 @@ public sealed partial class SettingsWindow : Microsoft.UI.Xaml.Window
         CheckButton.IsEnabled = InstallButton.IsEnabled = false;
         DownloadProgress.Visibility = Visibility.Visible;
         DownloadProgress.IsIndeterminate = true;
-        SetUpdateState($"Downloading FrameBurst {update.Version}…", "FrameBurst will restart when it's done", 0xE896, busy: false);
+        SetUpdateState($"Downloading FrameBurst {update.Version}…", "FrameBurst will restart when it's done", 0xE896, busy: false, Tone.Accent);
         var progress = new Progress<double>(f =>
         {
             DownloadProgress.IsIndeterminate = false;
             DownloadProgress.Value = f * 100;
-            UpdateStatus.Text = $"{f:P0} downloaded. FrameBurst will restart when it's done";
+            UpdateRow.Description = $"{f:P0} downloaded. FrameBurst will restart when it's done";
         });
         try
         {
             await Updater.InstallAsync(update, progress);
-            SetUpdateState("Installing…", "FrameBurst is restarting", 0xE896, busy: true);
+            SetUpdateState("Installing…", "FrameBurst is restarting", 0xE896, busy: true, Tone.Accent);
             _exitForUpdate(); // the installer replaces the files and restarts FrameBurst
         }
         catch (Exception ex)
         {
             Log.Write("update failed: " + ex);
-            SetUpdateState("The update failed", ex.Message, 0xE7BA, busy: false);
+            SetUpdateState("The update failed", ex.Message, 0xE7BA, busy: false, Tone.Critical);
             DownloadProgress.Visibility = Visibility.Collapsed;
             _updateBusy = false;
             CheckButton.IsEnabled = InstallButton.IsEnabled = true;
@@ -192,12 +209,32 @@ public sealed partial class SettingsWindow : Microsoft.UI.Xaml.Window
     {
         Commit();
         try { _s.Save(); }
-        catch (Exception ex) { Error.Text = "Could not save settings: " + ex.Message; return; }
+        catch (Exception ex) { ShowError("Could not save settings: " + ex.Message); return; }
         Saved?.Invoke(_s);
         Close();
     }
 
     private void Cancel_Click(object sender, RoutedEventArgs e) => Close();
+
+    private void SaveAccelerator_Invoked(Microsoft.UI.Xaml.Input.KeyboardAccelerator sender, Microsoft.UI.Xaml.Input.KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        Save_Click(sender, new RoutedEventArgs());
+    }
+
+    private void CancelAccelerator_Invoked(Microsoft.UI.Xaml.Input.KeyboardAccelerator sender, Microsoft.UI.Xaml.Input.KeyboardAcceleratorInvokedEventArgs args)
+    {
+        // Leave Esc to open popups (ComboBox, NumberBox) first; they close themselves and mark it handled.
+        args.Handled = true;
+        Close();
+    }
+
+    /// <summary>Shows an error in the footer with an icon, so it doesn't rely on colour alone.</summary>
+    private void ShowError(string message)
+    {
+        Error.Text = message;
+        ErrorPanel.Visibility = string.IsNullOrEmpty(message) ? Visibility.Collapsed : Visibility.Visible;
+    }
 
     /// <summary>Brings the window to the front (it may be behind other apps when reopened from the tray).</summary>
     public void BringToFront()

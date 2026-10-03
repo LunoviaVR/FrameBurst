@@ -16,10 +16,8 @@ namespace FrameBurst.UI;
 /// </summary>
 internal sealed class RegionSelector : Form
 {
-    private const int MagCells = 15, MagZoom = 9;
-    private const int Btn = 34, Gap = 2, SepW = 12, BarPad = 6;
+    private const int MagCells = 15;
     private static readonly int[] StrokeSizes = { 1, 2, 3, 4, 6, 8, 10, 14, 18, 24 };
-    private static readonly Color Accent = Color.FromArgb(0, 168, 255);
     private static readonly Color[] Palette =
     {
         Color.FromArgb(255, 59, 48), Color.FromArgb(255, 204, 0), Color.FromArgb(52, 199, 89),
@@ -54,14 +52,16 @@ internal sealed class RegionSelector : Form
     private readonly List<Item> _items = new();
     private readonly List<int> _separators = new();
     private Rectangle _bar, _hint;
-    private Item? _hoverItem;
+    private Item? _hoverItem, _pressedItem;
     private string? _toast;
     private readonly System.Windows.Forms.Timer _toastTimer = new() { Interval = 2500 };
 
-    private readonly Font _font = new("Segoe UI", 10f, FontStyle.Bold, GraphicsUnit.Pixel);
-    private readonly Font _hintFont = new("Segoe UI", 12f, FontStyle.Regular, GraphicsUnit.Pixel);
-    private readonly Font _fontSmall = new("Consolas", 11f, FontStyle.Regular, GraphicsUnit.Pixel);
-    private readonly Font _symbolFont = new("Segoe UI Symbol", 17f, FontStyle.Regular, GraphicsUnit.Pixel);
+    // Look: tokens scaled to the toolbar's monitor, and cached frosted glass for the two static panels.
+    private readonly OverlayTheme _theme;
+    private readonly GlassPanel _barGlass = new(), _hintGlass = new();
+    private readonly int _btn, _magZoom;
+    private Rectangle _home;           // monitor the toolbar is on (client coordinates)
+    private int _canvasVersion;        // bumped whenever _canvas pixels change, so glass re-blurs its backdrop
 
     public Rectangle? Result { get; private set; }
 
@@ -96,7 +96,11 @@ internal sealed class RegionSelector : Form
 
         var cursor = Cursor.Position;
         var home = _monitors.FirstOrDefault(m => m.Contains(cursor.X - _virtual.X, cursor.Y - _virtual.Y));
-        BuildToolbar(home.IsEmpty ? _monitors[0] : home);
+        _home = home.IsEmpty ? _monitors[0] : home;
+        _theme = new OverlayTheme(Native.ScaleAt(_home.X + _virtual.X + _home.Width / 2, _home.Y + _virtual.Y + _home.Height / 2));
+        _btn = _theme.Px(36);
+        _magZoom = _theme.Px(9);
+        BuildToolbar(_home);
         _toastTimer.Tick += (_, _) => { _toastTimer.Stop(); _toast = null; InvalidateBar(); };
     }
 
@@ -146,9 +150,10 @@ internal sealed class RegionSelector : Form
             (Tool.Arrow, "Arrow (A)"), (Tool.Rectangle, "Rectangle (R)"), (Tool.Text, "Text (T)"),
             (Tool.Blur, "Blur (B)"),
         };
+        int gap = _theme.Px(2), sepW = _theme.Px(13), pad = _theme.Px(6);
         int x = 0;
-        void Add(ItemKind k, Tool t, Color c, string tip) { _items.Add(new Item(new Rectangle(x, 0, Btn, Btn), k, t, c, tip)); x += Btn + Gap; }
-        void Sep() { x += SepW - Gap; _separators.Add(x - SepW / 2 - Gap / 2); x += Gap; }
+        void Add(ItemKind k, Tool t, Color c, string tip) { _items.Add(new Item(new Rectangle(x, 0, _btn, _btn), k, t, c, tip)); x += _btn + gap; }
+        void Sep() { x += sepW - gap; _separators.Add(x - sepW / 2 - gap / 2); x += gap; }
 
         foreach (var (t, tip) in tools) Add(ItemKind.Tool, t, Color.Empty, tip);
         Sep();
@@ -160,23 +165,28 @@ internal sealed class RegionSelector : Form
         Sep();
         Add(ItemKind.Cancel, Tool.Select, Color.Empty, "Cancel (Esc)");
 
-        int width = x - Gap + BarPad * 2, height = Btn + BarPad * 2;
-        _bar = new Rectangle(monitor.Left + (monitor.Width - width) / 2, monitor.Top + 14, width, height);
+        int width = x - gap + pad * 2, height = _btn + pad * 2;
+        _bar = new Rectangle(monitor.Left + (monitor.Width - width) / 2, monitor.Top + _theme.Px(16), width, height);
         for (int i = 0; i < _items.Count; i++)
         {
             var it = _items[i];
-            _items[i] = it with { R = new Rectangle(it.R.X + _bar.X + BarPad, _bar.Y + BarPad, Btn, Btn) };
+            _items[i] = it with { R = new Rectangle(it.R.X + _bar.X + pad, _bar.Y + pad, _btn, _btn) };
         }
-        for (int i = 0; i < _separators.Count; i++) _separators[i] += _bar.X + BarPad;
-        int hintW = Math.Max(width, 560);
-        _hint = new Rectangle(_bar.X + (width - hintW) / 2, _bar.Bottom + 6, hintW, 26);
+        for (int i = 0; i < _separators.Count; i++) _separators[i] += _bar.X + pad;
+        _hint = new Rectangle(monitor.Left, _bar.Bottom + _theme.Px(8), monitor.Width, _theme.Px(30));
     }
 
-    private void InvalidateBar()
+    /// <summary>Everything the toolbar and hint pill (with their shadows) can cover.</summary>
+    private Rectangle ChromeBounds
     {
-        Invalidate(Rectangle.Inflate(_bar, 2, 2));
-        Invalidate(Rectangle.Inflate(_hint, 2, 2));
+        get
+        {
+            int m = _theme.Px(14);
+            return Rectangle.FromLTRB(_home.Left, _bar.Top - m, _home.Right, _hint.Bottom + m);
+        }
     }
+
+    private void InvalidateBar() => Invalidate(ChromeBounds);
 
     private Item? ItemAt(Point p) => _bar.Contains(p) ? _items.FirstOrDefault(i => i.R.Contains(p)) : null;
 
@@ -252,6 +262,7 @@ internal sealed class RegionSelector : Form
         _ops.Add(op);
         _redo.Clear();
         op.Apply(_canvas);
+        _canvasVersion++;
         Invalidate(op.Bounds);
         InvalidateBar();
     }
@@ -272,6 +283,7 @@ internal sealed class RegionSelector : Form
         var op = _redo.Pop();
         _ops.Add(op);
         op.Apply(_canvas);
+        _canvasVersion++;
         Invalidate(op.Bounds);
         InvalidateBar();
     }
@@ -287,6 +299,7 @@ internal sealed class RegionSelector : Form
         }
         finally { _canvas.UnlockBits(bd); }
         foreach (var op in _ops) op.Apply(_canvas);
+        _canvasVersion++;
         Invalidate();
     }
 
@@ -296,7 +309,7 @@ internal sealed class RegionSelector : Form
         {
             Multiline = true,
             BorderStyle = BorderStyle.FixedSingle,
-            BackColor = Color.FromArgb(28, 28, 32),
+            BackColor = Color.FromArgb(255, OverlayTheme.GlassOpaque),
             ForeColor = _color == Color.Black ? Color.White : _color,
             Font = TextOp.MakeFont(TextPx),
             Location = p,
@@ -367,7 +380,7 @@ internal sealed class RegionSelector : Form
         }
         if (e.Button != MouseButtons.Left) return;
 
-        if (ItemAt(e.Location) is { } item) { ClickItem(item); return; }
+        if (ItemAt(e.Location) is { } item) { _pressedItem = item; ClickItem(item); InvalidateBar(); return; }
         if (_bar.Contains(e.Location)) return;
 
         var p = e.Location;
@@ -426,6 +439,7 @@ internal sealed class RegionSelector : Form
     protected override void OnMouseUp(MouseEventArgs e)
     {
         if (e.Button != MouseButtons.Left) return;
+        if (_pressedItem != null) { _pressedItem = null; InvalidateBar(); }
 
         if (_current != null)
         {
@@ -558,21 +572,22 @@ internal sealed class RegionSelector : Form
 
     private Rectangle LabelRect(Rectangle sel)
     {
-        var size = new Size(170, 22);
-        int y = sel.Top - size.Height - 4;
-        if (y < 0) y = sel.Top + 4;
+        var size = new Size(_theme.Px(240), _theme.Px(22));
+        int y = sel.Top - size.Height - _theme.Px(6);
+        if (y < 0) y = sel.Top + _theme.Px(6);
         return new Rectangle(sel.Left, y, size.Width, size.Height);
     }
 
     private Rectangle MagnifierRect()
     {
-        int size = MagCells * MagZoom;
-        int h = size + 40;
-        int x = _mouse.X + 24, y = _mouse.Y + 24;
+        int size = MagCells * _magZoom;
+        int h = size + _theme.Px(40);
+        int off = _theme.Px(24);
+        int x = _mouse.X + off, y = _mouse.Y + off;
         var mon = _monitors.FirstOrDefault(m => m.Contains(_mouse));
         if (mon.IsEmpty) mon = ClientRectangle;
-        if (x + size > mon.Right) x = _mouse.X - 24 - size;
-        if (y + h > mon.Bottom) y = _mouse.Y - 24 - h;
+        if (x + size > mon.Right) x = _mouse.X - off - size;
+        if (y + h > mon.Bottom) y = _mouse.Y - off - h;
         return new Rectangle(x, y, size, h);
     }
 
@@ -601,147 +616,94 @@ internal sealed class RegionSelector : Form
             var outline = Rectangle.Inflate(active, 1, 1);
             if (!_monitors.Any(m => m.Contains(Rectangle.Inflate(outline, 1, 1)))) outline = Rectangle.Inflate(active, -2, -2);
             g.SmoothingMode = SmoothingMode.None;
-            using (var dark = new Pen(Color.FromArgb(200, 0, 0, 0), 3))
+            using (var dark = new Pen(OverlayTheme.Scrim, 3))
                 g.DrawRectangle(dark, outline.X - 1, outline.Y - 1, outline.Width + 1, outline.Height + 1);
-            using (var pen = new Pen(Accent, 1) { DashStyle = _dragging ? DashStyle.Solid : DashStyle.Dash })
+            using (var pen = new Pen(OverlayTheme.Accent, 1) { DashStyle = _dragging ? DashStyle.Solid : DashStyle.Dash })
                 g.DrawRectangle(pen, outline.X, outline.Y, outline.Width - 1, outline.Height - 1);
             DrawLabel(g, active);
         }
 
-        if (clip.IntersectsWith(Rectangle.Inflate(_bar, 2, 2)) || clip.IntersectsWith(Rectangle.Inflate(_hint, 2, 2)))
-            DrawToolbar(g);
+        if (clip.IntersectsWith(ChromeBounds)) DrawToolbar(g);
         if (ShowMagnifier) DrawMagnifier(g);
     }
 
     private void DrawToolbar(Graphics g)
     {
+        _barGlass.Paint(g, _theme, _canvas, _bar, _canvasVersion, OverlayTheme.GlassTint);
         g.SmoothingMode = SmoothingMode.AntiAlias;
-        g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
-        using (var bg = new SolidBrush(Color.FromArgb(240, 24, 24, 28)))
-        using (var path = RoundRect(_bar, 10))
+
+        using (var sep = new Pen(OverlayTheme.Divider))
         {
-            g.FillPath(bg, path);
-            using var border = new Pen(Color.FromArgb(70, 255, 255, 255));
-            g.DrawPath(border, path);
+            int inset = _theme.Px(10);
+            foreach (int sx in _separators) g.DrawLine(sep, sx, _bar.Y + inset, sx, _bar.Bottom - inset);
         }
-        using (var sep = new Pen(Color.FromArgb(60, 255, 255, 255)))
-            foreach (int sx in _separators) g.DrawLine(sep, sx, _bar.Y + 10, sx, _bar.Bottom - 10);
 
         foreach (var it in _items)
         {
-            bool selected = (it.Kind == ItemKind.Tool && it.Tool == _tool);
-            bool hovered = it == _hoverItem;
+            bool selected = it.Kind == ItemKind.Tool && it.Tool == _tool;
             bool disabled = (it.Kind == ItemKind.Undo && _ops.Count == 0 && _textBox == null) || (it.Kind == ItemKind.Redo && _redo.Count == 0);
-            if (selected || hovered)
-            {
-                using var hb = new SolidBrush(selected ? Color.FromArgb(200, Accent) : Color.FromArgb(50, 255, 255, 255));
-                using var hp = RoundRect(it.R, 7);
-                g.FillPath(hb, hp);
-            }
-            var fg = disabled ? Color.FromArgb(90, 255, 255, 255) : Color.White;
+            if (selected) _theme.FillRound(g, it.R, OverlayTheme.AccentStrong, OverlayTheme.RadiusControl);
+            else if (!disabled && it == _pressedItem) _theme.FillRound(g, it.R, OverlayTheme.Pressed, OverlayTheme.RadiusControl);
+            else if (!disabled && it == _hoverItem) _theme.FillRound(g, it.R, OverlayTheme.Hover, OverlayTheme.RadiusControl);
+            var fg = disabled ? OverlayTheme.TextDisabled : OverlayTheme.Text;
             switch (it.Kind)
             {
-                case ItemKind.Tool: DrawToolIcon(g, it.Tool, it.R, fg); break;
+                case ItemKind.Tool: _theme.DrawGlyph(g, ToolGlyph(it.Tool), it.R, fg); break;
                 case ItemKind.Color: DrawSwatch(g, it); break;
                 case ItemKind.Size:
                 {
                     // Dot sized like the stroke, in the current colour, with a light edge so dark colours show.
-                    float d = Math.Clamp(StrokeWidth + 2, 5, 22);
-                    float x0 = it.R.X + (Btn - d) / 2f, y0 = it.R.Y + (Btn - d) / 2f;
+                    float d = Math.Clamp(StrokeWidth + 2, 5, 22) * (float)_theme.Scale;
+                    float x0 = it.R.X + (_btn - d) / 2f, y0 = it.R.Y + (_btn - d) / 2f;
                     using (var b = new SolidBrush(_color)) g.FillEllipse(b, x0, y0, d, d);
-                    using (var edge = new Pen(Color.FromArgb(200, 255, 255, 255), 1.2f)) g.DrawEllipse(edge, x0, y0, d, d);
+                    using (var edge = new Pen(OverlayTheme.SwatchEdge, _theme.PxF(1))) g.DrawEllipse(edge, x0, y0, d, d);
                     break;
                 }
-                case ItemKind.Undo: DrawGlyph(g, "↶", it.R, fg); break;
-                case ItemKind.Redo: DrawGlyph(g, "↷", it.R, fg); break;
-                case ItemKind.Cancel: DrawGlyph(g, "✕", it.R, fg); break;
+                case ItemKind.Undo: _theme.DrawGlyph(g, OverlayTheme.GlyphUndo, it.R, fg); break;
+                case ItemKind.Redo: _theme.DrawGlyph(g, OverlayTheme.GlyphRedo, it.R, fg); break;
+                case ItemKind.Cancel: _theme.DrawGlyph(g, OverlayTheme.GlyphClose, it.R, fg); break;
             }
         }
 
-        // Hint / toast line under the bar.
+        // Hint / toast pill under the bar, sized to its text.
         string hint = HintText();
-        var size = g.MeasureString(hint, _hintFont);
-        int w = Math.Max((int)size.Width + 24, 200);
+        g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+        var size = g.MeasureString(hint, _theme.Body);
+        int w = Math.Min(Math.Max((int)size.Width + _theme.Px(32), _theme.Px(200)), _hint.Width);
         var box = new Rectangle(_hint.X + (_hint.Width - w) / 2, _hint.Y, w, _hint.Height);
-        using (var bg = new SolidBrush(Color.FromArgb(_toast != null ? 245 : 215, _toast != null ? 0 : 20, _toast != null ? 110 : 20, _toast != null ? 170 : 24)))
-        using (var path = RoundRect(box, 8))
-            g.FillPath(bg, path);
-        using var fmt = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-        g.DrawString(hint, _hintFont, Brushes.White, box, fmt);
+        _hintGlass.Paint(g, _theme, _canvas, box, _canvasVersion, _toast != null ? OverlayTheme.ToastTint : OverlayTheme.GlassTint);
+        using var text = new SolidBrush(OverlayTheme.Text);
+        using var fmt = new StringFormat(StringFormatFlags.NoWrap) { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center, Trimming = StringTrimming.EllipsisCharacter };
+        g.DrawString(hint, _theme.Body, text, box, fmt);
     }
+
+    private static string ToolGlyph(Tool tool) => tool switch
+    {
+        Tool.Select => OverlayTheme.GlyphSelect,
+        Tool.Pen => OverlayTheme.GlyphPen,
+        Tool.Highlighter => OverlayTheme.GlyphHighlighter,
+        Tool.Arrow => OverlayTheme.GlyphArrow,
+        Tool.Rectangle => OverlayTheme.GlyphRectangle,
+        Tool.Text => OverlayTheme.GlyphText,
+        Tool.Blur => OverlayTheme.GlyphBlur,
+        _ => "",
+    };
 
     private void DrawSwatch(Graphics g, Item it)
     {
         var c = it.Color;
         bool active = c.ToArgb() == _color.ToArgb();
-        var center = new PointF(it.R.X + Btn / 2f, it.R.Y + Btn / 2f);
-        float d = 18;
+        var center = new PointF(it.R.X + _btn / 2f, it.R.Y + _btn / 2f);
+        float d = _theme.PxF(16);
         using (var b = new SolidBrush(c)) g.FillEllipse(b, center.X - d / 2, center.Y - d / 2, d, d);
-        using (var edge = new Pen(Color.FromArgb(120, 255, 255, 255))) g.DrawEllipse(edge, center.X - d / 2, center.Y - d / 2, d, d);
+        using (var edge = new Pen(OverlayTheme.SwatchEdge, _theme.PxF(1))) g.DrawEllipse(edge, center.X - d / 2, center.Y - d / 2, d, d);
         if (active)
-            using (var ring = new Pen(Accent, 2.5f)) g.DrawEllipse(ring, center.X - 13, center.Y - 13, 26, 26);
-    }
-
-    private void DrawGlyph(Graphics g, string glyph, Rectangle r, Color fg)
-    {
-        using var b = new SolidBrush(fg);
-        using var fmt = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-        g.DrawString(glyph, _symbolFont, b, r, fmt);
-    }
-
-    private void DrawToolIcon(Graphics g, Tool tool, Rectangle r, Color fg)
-    {
-        float cx = r.X + Btn / 2f, cy = r.Y + Btn / 2f;
-        using var pen = new Pen(fg, 2f) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round };
-        using var brush = new SolidBrush(fg);
-        switch (tool)
         {
-            case Tool.Select:
-                using (var dash = new Pen(fg, 1.8f) { DashStyle = DashStyle.Dash })
-                    g.DrawRectangle(dash, cx - 9, cy - 8, 18, 16);
-                g.FillPolygon(brush, new[] { new PointF(cx + 2, cy + 1), new PointF(cx + 11, cy + 5), new PointF(cx + 6, cy + 6), new PointF(cx + 5, cy + 11) });
-                break;
-            case Tool.Pen:
-                g.DrawLine(new Pen(fg, 3f) { StartCap = LineCap.Round, EndCap = LineCap.Triangle }, cx + 7, cy - 7, cx - 5, cy + 5);
-                g.DrawLine(pen, cx - 9, cy + 9, cx - 6, cy + 6);
-                break;
-            case Tool.Highlighter:
-                using (var hl = new Pen(Color.FromArgb(200, 255, 214, 10), 7f)) g.DrawLine(hl, cx - 9, cy + 5, cx + 9, cy + 5);
-                g.DrawLine(new Pen(fg, 4f) { EndCap = LineCap.Square }, cx + 6, cy - 9, cx - 2, cy - 1);
-                break;
-            case Tool.Arrow:
-                using (var ap = new Pen(fg, 2.2f) { CustomEndCap = new AdjustableArrowCap(4, 4, true), StartCap = LineCap.Round })
-                    g.DrawLine(ap, cx - 8, cy + 8, cx + 7, cy - 7);
-                break;
-            case Tool.Rectangle:
-                g.DrawRectangle(pen, cx - 9, cy - 7, 18, 14);
-                break;
-            case Tool.Text:
-                using (var f = new Font("Segoe UI", 19f, FontStyle.Bold, GraphicsUnit.Pixel))
-                using (var fmt = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
-                    g.DrawString("T", f, brush, r, fmt);
-                break;
-            case Tool.Blur:
-                for (int yy = 0; yy < 3; yy++)
-                    for (int xx = 0; xx < 3; xx++)
-                    {
-                        using var b = new SolidBrush(Color.FromArgb(70 + ((xx + yy) % 3) * 70, fg));
-                        g.FillRectangle(b, cx - 9 + xx * 6.3f, cy - 9 + yy * 6.3f, 5.3f, 5.3f);
-                    }
-                break;
+            // A ring with a gap: the shape marks the choice, not just the colour.
+            float rd = _theme.PxF(24);
+            using var ring = new Pen(OverlayTheme.Text, _theme.PxF(1.5));
+            g.DrawEllipse(ring, center.X - rd / 2, center.Y - rd / 2, rd, rd);
         }
-    }
-
-    private static GraphicsPath RoundRect(Rectangle r, int radius)
-    {
-        var p = new GraphicsPath();
-        int d = radius * 2;
-        p.AddArc(r.X, r.Y, d, d, 180, 90);
-        p.AddArc(r.Right - d - 1, r.Y, d, d, 270, 90);
-        p.AddArc(r.Right - d - 1, r.Bottom - d - 1, d, d, 0, 90);
-        p.AddArc(r.X, r.Bottom - d - 1, d, d, 90, 90);
-        p.CloseFigure();
-        return p;
     }
 
     private void DrawLabel(Graphics g, Rectangle sel)
@@ -749,54 +711,59 @@ internal sealed class RegionSelector : Form
         var r = LabelRect(sel);
         var v = ToVirtual(sel);
         string text = $"{v.Width} × {v.Height}   @ {v.X}, {v.Y}";
-        g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
-        var sz = g.MeasureString(text, _font);
-        var box = new Rectangle(r.X, r.Y, (int)sz.Width + 12, r.Height);
-        using var bg = new SolidBrush(Color.FromArgb(220, 20, 20, 24));
-        g.FillRectangle(bg, box);
-        g.DrawString(text, _font, Brushes.White, box.X + 6, box.Y + (box.Height - sz.Height) / 2);
+        g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+        var sz = g.MeasureString(text, _theme.Mono);
+        var box = new Rectangle(r.X, r.Y, Math.Min((int)sz.Width + _theme.Px(14), r.Width), r.Height);
+        _theme.PaintElevated(g, box, OverlayTheme.RadiusControl);
+        using var fg = new SolidBrush(OverlayTheme.Text);
+        g.DrawString(text, _theme.Mono, fg, box.X + _theme.Px(7), box.Y + (box.Height - sz.Height) / 2);
     }
 
     private void DrawMagnifier(Graphics g)
     {
         var r = MagnifierRect();
-        int size = MagCells * MagZoom;
+        int size = MagCells * _magZoom;
         var src = new Rectangle(_mouse.X - MagCells / 2, _mouse.Y - MagCells / 2, MagCells, MagCells);
         var dst = new Rectangle(r.X, r.Y, size, size);
 
+        _theme.PaintElevated(g, r);
+        var state = g.Save();
+        using (var clipPath = OverlayTheme.RoundRect(new RectangleF(r.X + 1, r.Y + 1, r.Width - 2, r.Height - 2), _theme.PxF(OverlayTheme.RadiusSurface)))
+            g.SetClip(clipPath);
         g.SmoothingMode = SmoothingMode.None;
-        using (var bg = new SolidBrush(Color.FromArgb(235, 20, 20, 24))) g.FillRectangle(bg, r);
         g.InterpolationMode = InterpolationMode.NearestNeighbor;
         g.PixelOffsetMode = PixelOffsetMode.Half;
         g.DrawImage(_canvas, dst, src, GraphicsUnit.Pixel);
         g.PixelOffsetMode = PixelOffsetMode.Default;
 
-        using (var grid = new Pen(Color.FromArgb(40, 255, 255, 255)))
+        using (var grid = new Pen(OverlayTheme.Divider))
             for (int i = 1; i < MagCells; i++)
             {
-                g.DrawLine(grid, dst.X + i * MagZoom, dst.Y, dst.X + i * MagZoom, dst.Bottom);
-                g.DrawLine(grid, dst.X, dst.Y + i * MagZoom, dst.Right, dst.Y + i * MagZoom);
+                g.DrawLine(grid, dst.X + i * _magZoom, dst.Y, dst.X + i * _magZoom, dst.Bottom);
+                g.DrawLine(grid, dst.X, dst.Y + i * _magZoom, dst.Right, dst.Y + i * _magZoom);
             }
-        int c = MagCells / 2 * MagZoom;
-        using (var center = new Pen(Accent, 2)) g.DrawRectangle(center, dst.X + c, dst.Y + c, MagZoom, MagZoom);
-        using (var border = new Pen(Color.FromArgb(120, 255, 255, 255))) g.DrawRectangle(border, r.X, r.Y, r.Width - 1, r.Height - 1);
+        int c = MagCells / 2 * _magZoom;
+        using (var center = new Pen(OverlayTheme.Accent, 2)) g.DrawRectangle(center, dst.X + c, dst.Y + c, _magZoom, _magZoom);
+        using (var divider = new Pen(OverlayTheme.Border)) g.DrawLine(divider, r.X, dst.Bottom, r.Right, dst.Bottom);
+        g.Restore(state);
 
         // Readout shows the true screen colour (without edits), the same value the picker copies.
         string color = "";
+        int pad = _theme.Px(8);
         if (_mouse.X >= 0 && _mouse.Y >= 0 && _mouse.X < _virtual.Width && _mouse.Y < _virtual.Height)
         {
             int o = (_mouse.Y * _virtual.Width + _mouse.X) * 4;
             color = $"#{_base[o + 2]:X2}{_base[o + 1]:X2}{_base[o]:X2}";
+            int sws = _theme.Px(22);
+            var swr = new Rectangle(r.Right - pad - sws, dst.Bottom + (r.Bottom - dst.Bottom - sws) / 2, sws, sws);
+            using (var sw = new SolidBrush(Color.FromArgb(_base[o + 2], _base[o + 1], _base[o]))) g.FillRectangle(sw, swr);
+            using (var edge = new Pen(OverlayTheme.SwatchEdge)) g.DrawRectangle(edge, swr);
         }
-        g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
-        g.DrawString($"{_mouse.X + _virtual.X}, {_mouse.Y + _virtual.Y}", _fontSmall, Brushes.White, r.X + 6, dst.Bottom + 4);
-        g.DrawString(color, _fontSmall, Brushes.White, r.X + 6, dst.Bottom + 20);
-        if (color.Length > 0)
-        {
-            int o = (_mouse.Y * _virtual.Width + _mouse.X) * 4;
-            using var sw = new SolidBrush(Color.FromArgb(_base[o + 2], _base[o + 1], _base[o]));
-            g.FillRectangle(sw, r.Right - 26, dst.Bottom + 8, 18, 24);
-        }
+        g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+        using var fg = new SolidBrush(OverlayTheme.Text);
+        using var fg2 = new SolidBrush(OverlayTheme.TextSecondary);
+        g.DrawString($"{_mouse.X + _virtual.X}, {_mouse.Y + _virtual.Y}", _theme.Mono, fg2, r.X + pad, dst.Bottom + _theme.Px(4));
+        g.DrawString(color, _theme.Mono, fg, r.X + pad, dst.Bottom + _theme.Px(20));
     }
 
     protected override void Dispose(bool disposing)
@@ -806,7 +773,8 @@ internal sealed class RegionSelector : Form
             _toastTimer.Dispose();
             _textBox?.Dispose();
             _canvas.Dispose();
-            _font.Dispose(); _hintFont.Dispose(); _fontSmall.Dispose(); _symbolFont.Dispose();
+            _barGlass.Dispose(); _hintGlass.Dispose();
+            _theme.Dispose();
         }
         base.Dispose(disposing);
     }

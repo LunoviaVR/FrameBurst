@@ -289,10 +289,107 @@ internal static class SelfTest
         return rc;
     }
 
+    /// <summary>
+    /// `FrameBurst.exe --selftest [outputDir] --settingsui` — opens the real Settings window (every page, dark and
+    /// light, wide and narrow) and a message dialog, and saves screen captures of them. Nothing is saved to settings.
+    /// </summary>
+    internal static async void SettingsShots(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        using var cap = new DesktopCapturer();
+        int pid = Environment.ProcessId;
+        var host = new UI.TrayMenu(); // like the tray: a hidden window outlives the ones we open and close
+        void Shoot(IntPtr hwnd, string name)
+        {
+            var b = Win32.Native.GetWindowBounds(hwnd);
+            var shot = cap.CaptureAll();
+            var area = Rectangle.Intersect(b, shot.VirtualBounds);
+            using var bmp = ImageOutput.ToBitmap(shot.ComposeBgra(area), area.Width, area.Height);
+            string path = Path.Combine(dir, name + ".png");
+            bmp.Save(path, ImageFormat.Png);
+            Console.WriteLine($"settingsui: {path} ({area.Width}x{area.Height})");
+        }
+        try
+        {
+            foreach (var theme in new[] { Microsoft.UI.Xaml.ElementTheme.Dark, Microsoft.UI.Xaml.ElementTheme.Light })
+            {
+                string t = theme.ToString().ToLowerInvariant();
+                var w = new UI.SettingsWindow(Settings.Load(), () => { });
+                ((Microsoft.UI.Xaml.FrameworkElement)w.Content).RequestedTheme = theme;
+                w.BringToFront();
+                var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(w);
+                await Task.Delay(1200);
+                foreach (var page in new[] { "Capture", "Output", "About" })
+                {
+                    w.ShowPage(page);
+                    await Task.Delay(700);
+                    Shoot(hwnd, $"settings_{t}_{page.ToLowerInvariant()}");
+                }
+                // Narrow: rows stack their action under the text.
+                w.ShowPage("Output");
+                var pos = w.AppWindow.Position;
+                w.AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(pos.X, pos.Y,
+                    (int)(580 * UI.WindowChrome.Scale(w)), w.AppWindow.Size.Height));
+                await Task.Delay(700);
+                Shoot(hwnd, $"settings_{t}_narrow");
+                w.Close();
+
+                _ = UI.MessageDialog.Ask("FrameBurst 9.9.9 is available", $"You have {Updater.Current}.\n\nRelease notes go here.",
+                    "Download and install", title: "FrameBurst update");
+                await Task.Delay(1000);
+                var dlg = Win32.Native.EnumerateVisibleWindows(IntPtr.Zero)
+                    .FirstOrDefault(x => Win32.Native.GetWindowThreadProcessId(x.Hwnd, out uint p) != 0 && p == pid).Hwnd;
+                if (dlg != IntPtr.Zero) { Shoot(dlg, $"dialog_{t}"); SendMessage(dlg, 0x0010 /* WM_CLOSE */, IntPtr.Zero, IntPtr.Zero); }
+                await Task.Delay(300);
+            }
+            // README screenshots: dark, each page at the height that shows all of it.
+            var docs = new UI.SettingsWindow(Settings.Load(), () => { });
+            ((Microsoft.UI.Xaml.FrameworkElement)docs.Content).RequestedTheme = Microsoft.UI.Xaml.ElementTheme.Dark;
+            docs.BringToFront();
+            var docsHwnd = WinRT.Interop.WindowNative.GetWindowHandle(docs);
+            await Task.Delay(1200);
+            foreach (var page in new[] { "Capture", "Output", "About" })
+            {
+                docs.ShowPage(page);
+                await Task.Delay(500);
+                UI.WindowChrome.SizeAndCenter(docs, 900, Math.Ceiling(docs.HeightForWholePage));
+                await Task.Delay(700);
+                Shoot(docsHwnd, $"docs_settings-{page.ToLowerInvariant()}");
+            }
+            docs.Close();
+            await Task.Delay(300);
+
+            // Tray menu (opens at the mouse pointer).
+            var menu = new Microsoft.UI.Xaml.Controls.MenuFlyout();
+            menu.Items.Add(UI.TrayMenu.Item("Capture region", "", () => { }, "Insert"));
+            menu.Items.Add(UI.TrayMenu.Item("Capture all monitors", "", () => { }, "Ctrl+PrintScreen"));
+            menu.Items.Add(new Microsoft.UI.Xaml.Controls.MenuFlyoutSeparator());
+            menu.Items.Add(UI.TrayMenu.Item("Settings", "", () => { }));
+            menu.Items.Add(UI.TrayMenu.Item("Exit", "", () => { }));
+            host.Show(menu);
+            await Task.Delay(800);
+            var c = Cursor.Position;
+            var shot2 = cap.CaptureAll();
+            var area2 = Rectangle.Intersect(new Rectangle(c.X - 360, c.Y - 360, 720, 720), shot2.VirtualBounds);
+            using (var bmp = ImageOutput.ToBitmap(shot2.ComposeBgra(area2), area2.Width, area2.Height))
+                bmp.Save(Path.Combine(dir, "traymenu.png"), ImageFormat.Png);
+            menu.Hide();
+            await Task.Delay(300); // let the flyout finish closing before its host window goes away
+        }
+        catch (Exception ex) { Console.WriteLine("settingsui FAILED: " + ex); }
+        host.Close();
+        Microsoft.UI.Xaml.Application.Current.Exit();
+    }
+
     public static int Run(string[] args)
     {
         string dir = args.Length > 0 ? args[0] : Path.Combine(Path.GetTempPath(), "FrameBurstSelfTest");
         Directory.CreateDirectory(dir);
+        // `--uiscale 1.5` / `--opaque`: draw the overlays as on a 150 % monitor / with transparency effects off.
+        int si = Array.IndexOf(args, "--uiscale");
+        if (si >= 0 && si + 1 < args.Length && double.TryParse(args[si + 1], System.Globalization.CultureInfo.InvariantCulture, out double uiScale))
+            UI.OverlayTheme.ScaleOverride = uiScale;
+        UI.OverlayTheme.ForceOpaque = args.Contains("--opaque");
         var log = new StringBuilder();
         void W(string s) { log.AppendLine(s); Console.WriteLine(s); }
         int rc = 0;

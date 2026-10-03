@@ -6,6 +6,9 @@
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
+                <!-- FrameBurst design system: tokens first, then the component styles built from them. -->
+                <ResourceDictionary Source="ms-appx:///UI/Theme/Tokens.xaml" />
+                <ResourceDictionary Source="ms-appx:///UI/Theme/Controls.xaml" />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>
